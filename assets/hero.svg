@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" role="img" aria-label="flowcode — words fly toward you inside 3D cubes and drift to a red horizon line">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10142a"/>
+      <stop offset="0.45" stop-color="#0b0e1a"/>
+      <stop offset="1" stop-color="#0d1124"/>
+    </linearGradient>
+    <linearGradient id="fog" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0e1a" stop-opacity="1"/>
+      <stop offset="0.42" stop-color="#0b0e1a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#0b0e1a" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="horizonGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff5c7a" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#ff5c7a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-60%" y="-300%" width="220%" height="700%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="glowAmber" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="floorClip"><rect x="0" y="150" width="1200" height="270"/></clipPath>
+    <clipPath id="card"><rect x="0" y="0" width="1200" height="420" rx="16"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#card)">
+    <rect width="1200" height="420" fill="url(#sky)"/>
+
+    <!-- ground plane receding to the vanishing point -->
+    <g clip-path="url(#floorClip)" stroke="#606eb4" stroke-opacity="0.3" stroke-width="1.6" fill="none">
+      <path d="M-900 420 L600 150 M-750 420 L600 150 M-600 420 L600 150 M-450 420 L600 150 M-300 420 L600 150 M-150 420 L600 150 M0 420 L600 150 M150 420 L600 150 M300 420 L600 150 M450 420 L600 150 M600 420 L600 150 M750 420 L600 150 M900 420 L600 150 M1050 420 L600 150 M1200 420 L600 150 M1350 420 L600 150 M1500 420 L600 150 M1650 420 L600 150 M1800 420 L600 150 M1950 420 L600 150 M2100 420 L600 150"/>
+      <g stroke="#8c9beb" stroke-opacity="0.34">
+        <path d="M0 420h1200M0 371h1200M0 331h1200M0 298h1200M0 271h1200M0 248h1200M0 229h1200M0 213h1200M0 200h1200M0 189h1200M0 180h1200M0 172h1200M0 166h1200M0 161h1200M0 157h1200M0 154h1200M0 152h1200"/>
+      </g>
+      <rect x="0" y="150" width="1200" height="270" fill="url(#fog)"/>
+    </g>
+
+    <!-- the red line: cross it and the word is lost -->
+    <ellipse cx="600" cy="150" rx="440" ry="46" fill="url(#horizonGlow)"/>
+    <rect x="150" y="148" width="900" height="4" rx="2" fill="#ff5c7a" opacity="0.5" filter="url(#soft)"/>
+    <rect x="150" y="149" width="900" height="2.5" rx="1.25" fill="#ff5c7a" opacity="0.92"/>
+
+    <!-- distant cube: rush -->
+    <g>
+      <polygon points="676,179.5 764,179.5 746,176 668,176" fill="#191e3a" stroke="#232a4d" stroke-width="1"/>
+      <polygon points="676,179.5 668,176 668,206 676,212.5" fill="#0e1224" stroke="#232a4d" stroke-width="1"/>
+      <rect x="676" y="179.5" width="88" height="33" rx="5" fill="#141830" stroke="#232a4d" stroke-width="1.4"/>
+      <text x="720" y="200.6" font-family="'JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="13" fill="#5c668f" text-anchor="middle" letter-spacing="0.5">rush</text>
+    </g>
+
+    <!-- mid cube: type -->
+    <g>
+      <polygon points="440,213 560,213 565,205 461,205" fill="#191e3a" stroke="#232a4d" stroke-width="1.1"/>
+      <polygon points="560,213 565,205 565,243 560,257" fill="#0e1224" stroke="#232a4d" stroke-width="1.1"/>
+      <rect x="440" y="213" width="120" height="44" rx="6" fill="#141830" stroke="#232a4d" stroke-width="1.6"/>
+      <text x="500" y="241" font-family="'JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="18" fill="#5c668f" text-anchor="middle" letter-spacing="0.6">type</text>
+    </g>
+
+    <!-- near cube: cube -->
+    <g>
+      <polygon points="747.5,255 912.5,255 866,239 725,239" fill="#191e3a" stroke="#232a4d" stroke-width="1.4"/>
+      <polygon points="747.5,255 725,239 725,290 747.5,315" fill="#0e1224" stroke="#232a4d" stroke-width="1.4"/>
+      <rect x="747.5" y="255" width="165" height="60" rx="8" fill="#141830" stroke="#232a4d" stroke-width="2"/>
+      <text x="830" y="293.5" font-family="'JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="24" fill="#5c668f" text-anchor="middle" letter-spacing="0.8">cube</text>
+    </g>
+
+    <!-- locked cube, mid-word: "esc" typed, "ape" to go -->
+    <g>
+      <polygon points="195,293 405,293 438,269 264,269" fill="#1b1f3d" stroke="#ffb86b" stroke-opacity="0.55" stroke-width="1.6"/>
+      <polygon points="405,293 438,269 438,330 405,367" fill="#11152b" stroke="#ffb86b" stroke-opacity="0.55" stroke-width="1.6"/>
+      <rect x="195" y="293" width="210" height="74" rx="10" fill="#141830" stroke="#ffb86b" stroke-width="2.4" filter="url(#glowAmber)"/>
+      <text x="300" y="341" font-family="'JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="31" text-anchor="middle" letter-spacing="1.5">
+        <tspan fill="#ffb86b">esc</tspan><tspan fill="#d8ddf5">ape</tspan>
+      </text>
+      <rect x="219" y="349" width="52" height="3" rx="1.5" fill="#ffb86b"/>
+    </g>
+
+    <!-- burst from a word just finished -->
+    <g fill="#ffb86b">
+      <rect x="470" y="300" width="7" height="7" rx="1.6" opacity="0.9"/>
+      <rect x="512" y="326" width="6" height="6" rx="1.4" opacity="0.7"/>
+      <rect x="452" y="344" width="5" height="5" rx="1.2" opacity="0.55"/>
+      <rect x="536" y="292" width="5" height="5" rx="1.2" opacity="0.45"/>
+      <rect x="494" y="358" width="4" height="4" rx="1" opacity="0.35"/>
+    </g>
+
+    <!-- HUD -->
+    <g>
+      <rect x="760" y="32" width="392" height="54" rx="13" fill="#141830" fill-opacity="0.85" stroke="#232a4d" stroke-width="1.4"/>
+      <text x="830" y="60" font-family="'Chakra Petch','JetBrains Mono',monospace" font-size="23" font-weight="700" fill="#ffb86b" text-anchor="middle">18</text>
+      <text x="830" y="75" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5c668f" text-anchor="middle" letter-spacing="1.4">SEC</text>
+      <text x="956" y="60" font-family="'Chakra Petch','JetBrains Mono',monospace" font-size="23" font-weight="700" fill="#d8ddf5" text-anchor="middle">92</text>
+      <text x="956" y="75" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5c668f" text-anchor="middle" letter-spacing="1.4">WPM</text>
+      <text x="1082" y="60" font-family="'Chakra Petch','JetBrains Mono',monospace" font-size="23" font-weight="700" fill="#ffd75e" text-anchor="middle">×14</text>
+      <text x="1082" y="75" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5c668f" text-anchor="middle" letter-spacing="1.4">COMBO</text>
+    </g>
+
+    <!-- wordmark -->
+    <g>
+      <rect x="48" y="38" width="27" height="27" rx="7" fill="#ffb86b" transform="rotate(-8 61.5 51.5)"/>
+      <text x="88" y="61" font-family="'Chakra Petch','JetBrains Mono',monospace" font-size="27" letter-spacing="0.5">
+        <tspan fill="#5c668f" font-weight="500">flow</tspan><tspan fill="#d8ddf5" font-weight="700">code</tspan>
+      </text>
+    </g>
+
+    <text x="48" y="388" font-family="'JetBrains Mono',monospace" font-size="13" fill="#5c668f" letter-spacing="0.4">finish the word before its cube crosses the line</text>
+
+    <rect x="0.75" y="0.75" width="1198.5" height="418.5" rx="16" fill="none" stroke="#232a4d" stroke-width="1.5"/>
+  </g>
+</svg>
