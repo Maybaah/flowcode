@@ -15,7 +15,7 @@ Finish each word before its cube crosses it. You set the pace — 20 to 200 word
 <img src="https://img.shields.io/badge/build_step-none-7bffb2?style=for-the-badge&labelColor=0b0e1a" alt="no build step">
 <img src="https://img.shields.io/badge/vanilla-JS-ffd75e?style=for-the-badge&labelColor=0b0e1a" alt="vanilla JavaScript">
 <img src="https://img.shields.io/badge/3D-CSS_transforms-7fd6ff?style=for-the-badge&labelColor=0b0e1a" alt="CSS 3D transforms">
-<img src="https://img.shields.io/badge/~60-kB-d8ddf5?style=for-the-badge&labelColor=0b0e1a" alt="about 60 kilobytes">
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7bffb2?style=for-the-badge&labelColor=0b0e1a" alt="MIT license"></a>
 
 </div>
 
@@ -162,6 +162,10 @@ server.js       static dev server
 - **Auto-pause** the moment the window loses focus, so a stray notification doesn't cost you three lives.
 - **Touch support** — tap the scene on mobile to summon the keyboard.
 - **Reduced-motion aware** — the screen shake respects `prefers-reduced-motion`.
+
+## License
+
+[MIT](LICENSE) — do what you like with it.
 
 <br>
 
