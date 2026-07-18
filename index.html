@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>flowcode — 3d typing flow</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23ffb86b'/%3E%3Ctext x='16' y='22' font-size='16' font-family='monospace' text-anchor='middle' fill='%230b0e1a'%3Ef%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ══════════ TOP BAR ══════════ -->
+<header id="topbar">
+  <div class="logo" title="flowcode">
+    <span class="logo-cube"></span>
+    <span class="logo-text">flow<b>code</b></span>
+  </div>
+
+  <nav id="config" aria-label="test settings">
+    <div class="cfg-group" id="cfg-mode">
+      <button class="pill" data-mode="time">time</button>
+      <button class="pill" data-mode="words">words</button>
+      <button class="pill" data-mode="endless">survival</button>
+      <button class="pill" data-mode="sudden">flawless</button>
+      <button class="pill" data-mode="ramp">rush</button>
+      <button class="pill" data-mode="zen">zen</button>
+    </div>
+    <div class="cfg-sep"></div>
+    <div class="cfg-group" id="cfg-time">
+      <button class="pill" data-time="15">15</button>
+      <button class="pill" data-time="30">30</button>
+      <button class="pill" data-time="60">60</button>
+      <button class="pill" data-time="120">120</button>
+    </div>
+    <div class="cfg-group" id="cfg-words">
+      <button class="pill" data-words="10">10</button>
+      <button class="pill" data-words="25">25</button>
+      <button class="pill" data-words="50">50</button>
+      <button class="pill" data-words="100">100</button>
+    </div>
+    <div class="cfg-sep"></div>
+    <div class="cfg-group" id="cfg-flags">
+      <button class="pill" id="tg-punct" title="add punctuation">@ punct</button>
+      <button class="pill" id="tg-nums" title="add numbers"># numbers</button>
+    </div>
+    <div class="cfg-sep"></div>
+    <div class="cfg-group" id="cfg-lang">
+      <button class="pill" data-lang="en">eng</button>
+      <button class="pill" data-lang="ru">rus</button>
+    </div>
+    <div class="cfg-sep"></div>
+    <div class="cfg-group wpm-group" title="flow speed: words per minute">
+      <span class="wpm-label">flow</span>
+      <input type="range" id="wpm-slider" min="20" max="200" step="5" value="40" aria-label="words per minute">
+      <span class="wpm-value" id="wpm-value">40</span>
+      <span class="wpm-unit">wpm</span>
+    </div>
+  </nav>
+
+  <div class="top-icons">
+    <button class="icon-btn" id="btn-sound" title="sound on/off" aria-label="sound">♪</button>
+    <button class="icon-btn" id="btn-theme" title="change theme" aria-label="theme">◐</button>
+  </div>
+</header>
+
+<!-- ══════════ HUD ══════════ -->
+<div id="hud" class="hidden" aria-hidden="true">
+  <div class="hud-item hud-main"><span id="hud-primary">0</span><label id="hud-primary-label">sec</label></div>
+  <div class="hud-item"><span id="hud-wpm">0</span><label>wpm</label></div>
+  <div class="hud-item"><span id="hud-acc">100</span><label>acc%</label></div>
+  <div class="hud-item hud-combo"><span id="hud-combo">0</span><label>combo</label></div>
+  <div class="hud-item hud-lives" id="hud-lives-wrap"><span id="hud-lives">♥♥♥</span><label>lives</label></div>
+  <div class="hud-item hud-flow" id="hud-flow-wrap"><span id="hud-flow">40</span><label>flow</label></div>
+</div>
+
+<div id="effect-banner" class="hidden"></div>
+<div id="capslock-warn" class="hidden">⇪ CapsLock is on</div>
+
+<!-- ══════════ 3D SCENE ══════════ -->
+<main id="scene-wrap">
+  <div id="scene">
+    <div id="floor"></div>
+    <div id="horizon-line"></div>
+    <div id="cubes"></div>
+    <div id="particles"></div>
+  </div>
+
+  <!-- start hint -->
+  <div id="start-hint" class="overlay-center">
+    <div class="hint-kbd-row">
+      <div class="hint-title">start typing — <em>and the flow begins</em></div>
+      <div class="hint-sub">words fly out inside cubes and drift toward the horizon.<br>finish each word before its cube crosses the red line.</div>
+      <div class="hint-keys">
+        <span><kbd>tab</kbd> restart</span>
+        <span><kbd>esc</kbd> pause</span>
+        <span><kbd>space</kbd> drop target</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- pause -->
+  <div id="pause-overlay" class="overlay-center hidden">
+    <div class="pause-box">
+      <div class="pause-title">paused</div>
+      <div class="pause-hint"><kbd>esc</kbd> — resume · <kbd>tab</kbd> — restart · <kbd>enter</kbd> — finish</div>
+    </div>
+  </div>
+
+  <!-- typed buffer -->
+  <div id="buffer-wrap" aria-live="off">
+    <span id="buffer"></span><span id="caret"></span>
+  </div>
+</main>
+
+<!-- ══════════ RESULTS ══════════ -->
+<section id="results" class="hidden" aria-label="results">
+  <div class="res-head">
+    <div class="res-big">
+      <div class="res-stat"><label>wpm</label><span id="res-wpm">0</span></div>
+      <div class="res-stat"><label>accuracy</label><span id="res-acc">0%</span></div>
+      <div id="res-pb" class="pb-badge hidden">new record!</div>
+    </div>
+    <canvas id="res-graph" width="760" height="220"></canvas>
+  </div>
+  <div class="res-grid">
+    <div class="res-cell"><label>raw</label><span id="res-raw">0</span></div>
+    <div class="res-cell"><label>consistency</label><span id="res-cons">0%</span></div>
+    <div class="res-cell"><label>chars</label><span id="res-chars">0/0</span></div>
+    <div class="res-cell"><label>words</label><span id="res-words">0</span></div>
+    <div class="res-cell"><label>escaped</label><span id="res-missed">0</span></div>
+    <div class="res-cell"><label>max combo</label><span id="res-combo">0</span></div>
+    <div class="res-cell"><label>score</label><span id="res-score">0</span></div>
+    <div class="res-cell"><label>time</label><span id="res-time">0s</span></div>
+  </div>
+  <div class="res-history">
+    <label>recent runs</label>
+    <canvas id="res-history-chart" width="760" height="60"></canvas>
+  </div>
+  <div class="res-foot"><kbd>tab</kbd> — next run</div>
+</section>
+
+<!-- ══════════ THEME PICKER ══════════ -->
+<div id="theme-menu" class="hidden">
+  <button data-theme="midnight">midnight</button>
+  <button data-theme="serika">serika</button>
+  <button data-theme="matrix">matrix</button>
+  <button data-theme="glacier">glacier</button>
+  <button data-theme="blood">blood</button>
+</div>
+
+<footer id="footbar">
+  <span class="foot-hint"><kbd>tab</kbd> restart · <kbd>esc</kbd> pause</span>
+  <span class="foot-note">flowcode · 3d typing flow</span>
+</footer>
+
+<!-- mobile keyboard summoner -->
+<input id="mobile-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-hidden="true">
+
+<script src="js/words.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
