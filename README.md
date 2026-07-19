@@ -9,12 +9,15 @@
 Words fly at you inside 3D cubes and drift toward a red line on the horizon.<br>
 Finish each word before its cube crosses it. You set the pace — 20 to 200 words per minute.
 
+### [▶ play now — maybaah.github.io/flowcode](https://maybaah.github.io/flowcode/)
+
 <br>
 
 <img src="https://img.shields.io/badge/dependencies-0-ffb86b?style=for-the-badge&labelColor=0b0e1a" alt="0 dependencies">
 <img src="https://img.shields.io/badge/build_step-none-7bffb2?style=for-the-badge&labelColor=0b0e1a" alt="no build step">
 <img src="https://img.shields.io/badge/vanilla-JS-ffd75e?style=for-the-badge&labelColor=0b0e1a" alt="vanilla JavaScript">
 <img src="https://img.shields.io/badge/3D-CSS_transforms-7fd6ff?style=for-the-badge&labelColor=0b0e1a" alt="CSS 3D transforms">
+<img src="https://img.shields.io/badge/PWA-offline_ready-d67fff?style=for-the-badge&labelColor=0b0e1a" alt="offline-ready PWA">
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7bffb2?style=for-the-badge&labelColor=0b0e1a" alt="MIT license"></a>
 
 </div>
@@ -66,6 +69,7 @@ That first letter **locks onto the nearest matching cube**, and everything you t
 | **flawless** | One typo or one escaped cube and it's over. |
 | **rush** | Flow speeds up by 4 wpm every 8 seconds. Three lives. Find your ceiling. |
 | **zen** | No timer, no limit, no lives. Stop when you want to. |
+| **daily** | The same seeded 60-second run for everyone, every day. Fixed 50 wpm flow, English words, no power-ups — compare scores fairly. |
 
 ## Power-up cubes
 
@@ -132,23 +136,48 @@ Cube lifespan is derived straight from the flow setting: `clamp(260 / wpm, 2.2s,
 </details>
 
 <details>
-<summary><b>Word lists &amp; layout</b></summary>
+<summary><b>Word sources: english, russian, code, your own text</b></summary>
 
 <br>
 
-English and Russian lists, roughly 250 common words each, weighted toward short ones. Toggle **@ punct** to fold in punctuation, capitals and the occasional parenthesis, and **# numbers** to mix in numerals.
+English and Russian lists, roughly 250 common words each, weighted toward short ones. Toggle **@ punct** to fold in punctuation, capitals and the occasional parenthesis, and **# numbers** to mix in numerals. Russian is forgiving about `ё` — typing `е` matches either way.
 
-Russian is forgiving about `ё` — typing `е` matches either way.
+The third language is **code**: 110 tokens with the symbols real programming makes you type — `()=>{}`, `arr[i]`, `a!==b`, `try:`, `Vec<T>`, `SELECT`. Brackets, operators and keywords across JS, Python, Rust, C, SQL, shell and HTML.
+
+And **✎ text** lets you paste anything of your own — an article, lyrics, code — and the cubes will carry your words instead.
+
+</details>
+
+<details>
+<summary><b>Weak keys &amp; adaptive practice</b></summary>
+
+<br>
+
+Every keystroke is tallied per character — hits and misses separately, merged across runs into `localStorage`. The results screen shows your **weakest keys** ranked by miss rate (once a key has enough presses to mean something).
+
+Turn on **✚ focus** and the word generator starts steering toward your three worst characters: about a third of spawned words are picked to contain them. The daily challenge ignores focus and custom text so everyone races the same words.
+
+</details>
+
+<details>
+<summary><b>Layout</b></summary>
+
+<br>
 
 ```
-index.html      markup
-style.css       themes, 3D scene, layout
-assets/         hero art
-js/game.js      engine — spawn, motion, input, scoring
-js/main.js      UI, settings, results, charts
-js/words.js     word lists and generator
-js/audio.js     WebAudio sound effects
-server.js       static dev server
+index.html            markup
+style.css             themes, 3D scene, layout
+fonts.css             self-hosted @font-face (no CDN)
+manifest.webmanifest  PWA manifest
+sw.js                 service worker: precache, offline
+assets/               hero art, icons, woff2 fonts
+js/stats.js           pure game math (shared with tests)
+js/game.js            engine — spawn, motion, input, scoring
+js/main.js            UI, settings, results, charts, share card
+js/words.js           word lists and generator
+js/audio.js           WebAudio sound effects
+server.js             static dev server
+tests/                unit tests: node --test tests/stats.test.js
 ```
 
 </details>
@@ -157,11 +186,14 @@ server.js       static dev server
 
 ## Details that matter
 
+- **Works offline.** A service worker precaches everything and the fonts are self-hosted — after the first visit there are zero network requests. Installable as a PWA.
+- **Share card.** One click renders your run — headline wpm, stats, the per-second chart — into a PNG ready to post.
 - **Sound with no audio files.** Every effect — keystroke, word burst, combo, miss, game over, new record — is synthesised at runtime with WebAudio oscillators.
 - **CapsLock warning**, because a locked CapsLock silently destroys a run.
 - **Auto-pause** the moment the window loses focus, so a stray notification doesn't cost you three lives.
-- **Touch support** — tap the scene on mobile to summon the keyboard.
+- **Touch support** — tap the scene on mobile to summon the keyboard; lanes reflow to fit narrow screens.
 - **Reduced-motion aware** — the screen shake respects `prefers-reduced-motion`.
+- **Tested.** The scoring, wpm, consistency and daily-seed math live in a pure module with a node test suite: `node --test tests/stats.test.js`.
 
 ## License
 

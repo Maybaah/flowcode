@@ -1,0 +1,16 @@
+{
+  "name": "flowcode — 3d typing flow",
+  "short_name": "flowcode",
+  "description": "A typing trainer where the words fight back: they fly at you in 3D cubes and you set the pace, 20–200 wpm.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0b0e1a",
+  "theme_color": "#0b0e1a",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

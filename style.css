@@ -367,7 +367,49 @@ body.playing #topbar { opacity: 0; transform: translateY(-8px); pointer-events: 
 .res-history { width: min(780px, 92vw); }
 .res-history label { color: var(--dim); font-size: 11px; }
 #res-history-chart { width: 100%; }
-.res-foot { color: var(--dim); font-size: 13px; }
+.res-foot {
+  color: var(--dim); font-size: 13px;
+  display: flex; gap: 18px; align-items: center;
+}
+#res-foot-note { color: var(--gold); }
+#res-foot-note:empty { display: none; }
+.card-btn {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  color: var(--dim); font-size: 12.5px; padding: 5px 12px;
+  transition: color .15s, border-color .15s;
+}
+.card-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* weakest keys */
+.res-weak-wrap { width: min(780px, 92vw); }
+.res-weak-wrap.hidden { display: none; }
+.res-weak-wrap label { color: var(--dim); font-size: 11px; display: block; margin-bottom: 5px; }
+#res-weak { display: flex; gap: 8px; flex-wrap: wrap; }
+.weak-chip {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 4px 10px; font-size: 12.5px; color: var(--dim);
+}
+.weak-chip b {
+  color: var(--danger); font-size: 14px; font-weight: 700; margin-right: 4px;
+}
+
+/* custom text modal */
+#custom-modal { z-index: 80; background: color-mix(in srgb, var(--bg) 72%, transparent); }
+.modal-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 26px 30px; width: min(560px, 92vw);
+  display: flex; flex-direction: column; gap: 14px; text-align: left;
+}
+.modal-title { font-family: "Chakra Petch", monospace; font-size: 20px; font-weight: 700; }
+#custom-text {
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
+  color: var(--text); font-family: inherit; font-size: 13.5px;
+  padding: 10px 12px; resize: vertical; min-height: 110px;
+}
+#custom-text:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.modal-row { display: flex; gap: 10px; }
+.modal-row .pill { border: 1px solid var(--line); }
+.modal-hint { color: var(--dim); font-size: 12px; }
 
 /* ═══════════════ theme menu ═══════════════ */
 #theme-menu {

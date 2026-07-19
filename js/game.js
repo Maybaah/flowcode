@@ -6,8 +6,18 @@ const Game = (() => {
   const DANGER_Z = -1600;     // alarm zone
   const CUBE_H = 64, CUBE_D = 46;
   const BASE_Y = 96;
-  const LANES = [-470, -160, 160, 470];
   const MAX_CUBES = 12;
+
+  // lanes are recomputed from the viewport so narrow screens keep cubes on-screen
+  let LANES = [-470, -160, 160, 470];
+  let CHAR_W = 17.5;
+  function computeLayout() {
+    const w = window.innerWidth || 1280;
+    CHAR_W = w < 900 ? 13.6 : 17.5;
+    // 1.16 ≈ perspective scale at spawn depth; 105 ≈ half of a typical cube
+    const maxX = Math.min(470, Math.max(60, (w / 2 - 105) / 1.16));
+    LANES = [-maxX, -maxX / 3, maxX / 3, maxX];
+  }
 
   const POWER_DEFS = {
     freeze: { icon: "❄", label: "freeze!" },
@@ -30,12 +40,15 @@ const Game = (() => {
     particlesEl = document.getElementById("particles");
     sceneWrap = document.getElementById("scene-wrap");
     horizonEl = document.getElementById("horizon-line");
+    computeLayout();
+    window.addEventListener("resize", computeLayout);
   }
 
   const lifetime = flow => clamp(260 / flow, 2.2, 9);
   const speed = flow => (SPAWN_Z - MISS_Z) / lifetime(flow);
   const livesFor = mode => mode === "endless" || mode === "ramp" ? 3 : 0;
   const livesMode = () => cfg.mode === "endless" || cfg.mode === "ramp";
+  const timed = () => cfg.mode === "time" || cfg.mode === "daily";
 
   /* ── start / stop ── */
 
@@ -53,10 +66,13 @@ const Game = (() => {
       locked: null,
       samples: [], sampleAcc: 0, lastCum: 0,
       errorsAt: [],
+      keyHit: {}, keyMiss: {},
+      rng: config.seed != null ? GameMath.mulberry32(config.seed) : Math.random,
       freezeUntil: 0, slowUntil: 0, x2Until: 0,
       over: false,
     };
     lastLane = -1;
+    computeLayout();
     running = true; paused = false;
     lastT = performance.now();
     raf = requestAnimationFrame(frame);
@@ -147,7 +163,7 @@ const Game = (() => {
       st.lastCum = cum;
     }
 
-    if (cfg.mode === "time" && st.elapsed >= cfg.time) return endRun("time");
+    if (timed() && st.elapsed >= cfg.time) return endRun("time");
     if (cfg.mode === "words" && st.spawned >= cfg.words && cubes.length === 0) return endRun("words");
 
     if (hooks.onHud) hooks.onHud(getHud());
@@ -156,7 +172,7 @@ const Game = (() => {
   function canSpawn() {
     if (cubes.length >= MAX_CUBES) return false;
     if (cfg.mode === "words") return st.spawned < cfg.words;
-    if (cfg.mode === "time") return st.elapsed < cfg.time;
+    if (timed()) return st.elapsed < cfg.time;
     return true;
   }
 
@@ -168,25 +184,25 @@ const Game = (() => {
     let cand = idx.filter(i => i !== lastLane && free(i));
     if (!cand.length) cand = idx.filter(free);
     if (!cand.length) cand = idx.filter(i => i !== lastLane);
-    return cand[(Math.random() * cand.length) | 0];
+    return cand[(st.rng() * cand.length) | 0];
   }
 
   function spawnCube() {
     st.spawned++;
     let power = null;
-    if (st.spawned > 6 && st.elapsed > 8 && Math.random() < 0.06) {
+    if (!cfg.noPowerups && st.spawned > 6 && st.elapsed > 8 && st.rng() < 0.06) {
       const pool = ["freeze", "slow", "bomb", "star", livesMode() ? "heart" : "star"];
-      power = pool[(Math.random() * pool.length) | 0];
+      power = pool[(st.rng() * pool.length) | 0];
     }
     let word, tries = 0;
     do {
-      word = power ? Words.shortWord(cfg) : Words.next(cfg);
+      word = power ? Words.shortWord(cfg, st.rng) : Words.next(cfg, st.rng);
       tries++;
     } while (tries < 16 && cubes.some(c => c.word === word || norm(c.word[0]) === norm(word[0])));
 
     const lane = pickLane();
     const c = {
-      word, power, lane, x: LANES[lane], z: SPAWN_Z, typed: 0,
+      word, power, lane, z: SPAWN_Z, typed: 0,
       born: st.elapsed, phase: Math.random() * 6.28, danger: false,
       el: null, letters: null,
     };
@@ -198,7 +214,7 @@ const Game = (() => {
   }
 
   function buildCubeEl(c) {
-    const w = Math.max(96, Math.round(c.word.length * 17.5 + 42));
+    const w = Math.max(96, Math.round(c.word.length * CHAR_W + 42));
     const el = document.createElement("div");
     el.className = "cube" + (c.power ? " power" : "");
     const box = document.createElement("div");
@@ -222,8 +238,8 @@ const Game = (() => {
     box.appendChild(mk("side", CUBE_D, CUBE_H, `translate(-50%,-50%) rotateY(90deg) translateZ(${w / 2}px)`));
 
     const front = mk("front", w, CUBE_H, `translate(-50%,-50%) translateZ(${CUBE_D / 2}px)`);
-    if (c.word.length > 13) front.style.fontSize = "19px";
-    else if (c.word.length > 10) front.style.fontSize = "22px";
+    if (c.word.length > 13) front.style.fontSize = CHAR_W < 15 ? "15px" : "19px";
+    else if (c.word.length > 10) front.style.fontSize = CHAR_W < 15 ? "17px" : "22px";
     if (c.power) front.dataset.icon = POWER_DEFS[c.power].icon;
     c.letters = [];
     for (const ch of c.word) {
@@ -245,7 +261,7 @@ const Game = (() => {
     const y = BASE_Y + Math.sin(st.elapsed * 2 + c.phase) * 5;
     const ry = Math.sin(st.elapsed * 1.2 + c.phase) * 5;
     c.el.style.transform =
-      `translate(-50%,-50%) translate3d(${c.x}px, ${y}px, ${c.z}px) rotateY(${ry}deg) scale(${scale})`;
+      `translate(-50%,-50%) translate3d(${LANES[c.lane]}px, ${y}px, ${c.z}px) rotateY(${ry}deg) scale(${scale})`;
   }
 
   function updateLetters(c) {
@@ -269,6 +285,8 @@ const Game = (() => {
 
   /* ── input ── */
 
+  const bump = (map, ch) => { const k = norm(ch).toLowerCase(); map[k] = (map[k] || 0) + 1; };
+
   function handleChar(ch) {
     if (!running || paused || st.over) return;
     if (!st.locked) {
@@ -276,10 +294,11 @@ const Game = (() => {
       for (const c of cubes) {
         if (norm(c.word[0]) === norm(ch) && (!best || c.z < best.z)) best = c;
       }
-      if (!best) return typoFx(null);
+      if (!best) return typoFx(null, ch);
       st.locked = best;
       best.typed = 1;
       st.correct++;
+      bump(st.keyHit, ch);
       best.el.classList.add("locked");
       updateLetters(best);
       Sfx.key();
@@ -290,18 +309,21 @@ const Game = (() => {
     if (norm(c.word[c.typed]) === norm(ch)) {
       c.typed++;
       st.correct++;
+      bump(st.keyHit, ch);
       Sfx.key();
       updateLetters(c);
       if (c.typed === c.word.length) completeWord(c);
     } else {
-      typoFx(c);
+      // the key they failed is the one the word expected
+      typoFx(c, c.word[c.typed]);
     }
   }
 
-  function typoFx(c) {
+  function typoFx(c, expectedCh) {
     st.wrong++;
     st.combo = 0;
     st.errorsAt.push(Math.floor(st.elapsed));
+    if (expectedCh) bump(st.keyMiss, expectedCh);
     Sfx.error();
     if (c) {
       c.el.classList.add("err");
@@ -327,14 +349,11 @@ const Game = (() => {
   }
 
   function completeWord(c) {
-    const mult = Math.min(1 + Math.floor(st.combo / 8), 6);
     st.hits++;
+    const early = c.z > -700;
+    st.score += GameMath.wordPoints(c.word.length, st.combo, early, st.elapsed < st.x2Until);
     st.combo++;
     st.maxCombo = Math.max(st.maxCombo, st.combo);
-    let pts = (10 + c.word.length * 8) * mult;
-    if (c.z > -700) pts = Math.round(pts * 1.5);   // early-kill bonus
-    if (st.elapsed < st.x2Until) pts *= 2;
-    st.score += pts;
     Sfx.word();
     if (st.combo % 10 === 0 && hooks.onBanner) {
       hooks.onBanner(`combo ×${st.combo}`);
@@ -393,7 +412,7 @@ const Game = (() => {
       if (c.power) el.style.background = "var(--gold)";
       particlesEl.appendChild(el);
       particles.push({
-        el, x: c.x, y: BASE_Y, z: c.z,
+        el, x: LANES[c.lane], y: BASE_Y, z: c.z,
         vx: (Math.random() - 0.5) * 620,
         vy: -80 - Math.random() * 380,
         vz: (Math.random() - 0.5) * 340,
@@ -414,12 +433,8 @@ const Game = (() => {
   /* ── run summary ── */
 
   function getHud() {
-    const wpm = st.elapsed > 1
-      ? Math.round((st.correct + st.hits) / 5 / (st.elapsed / 60))
-      : 0;
-    const acc = st.correct + st.wrong
-      ? Math.round(st.correct / (st.correct + st.wrong) * 100)
-      : 100;
+    const wpm = st.elapsed > 1 ? GameMath.wpm(st.correct, st.hits, st.elapsed) : 0;
+    const acc = GameMath.accuracy(st.correct, st.wrong, 0);
     return {
       elapsed: st.elapsed, flow: st.flow, wpm, acc,
       combo: st.combo, lives: st.lives,
@@ -443,29 +458,20 @@ const Game = (() => {
     particles = [];
     horizonEl.classList.remove("alarm");
 
-    const min = Math.max(st.elapsed, 1) / 60;
-    const wpm = Math.round((st.correct + st.hits) / 5 / min);
-    const raw = Math.round((st.correct + st.wrong + st.hits) / 5 / min);
-    const acc = st.correct + st.wrong
-      ? Math.round(st.correct / (st.correct + st.wrong) * 1000) / 10
-      : 100;
-    let cons = 0;
-    if (st.samples.length >= 3) {
-      const mean = st.samples.reduce((a, b) => a + b, 0) / st.samples.length;
-      if (mean > 0) {
-        const sd = Math.sqrt(st.samples.reduce((a, b) => a + (b - mean) ** 2, 0) / st.samples.length);
-        cons = clamp(Math.round((1 - sd / mean) * 100), 0, 100);
-      }
-    }
     const res = {
       reason, mode: cfg.mode, lang: cfg.lang, flow: cfg.flow,
-      wpm, raw, acc, cons,
+      seed: cfg.seed != null ? cfg.seed : null,
+      wpm: GameMath.wpm(st.correct, st.hits, st.elapsed),
+      raw: GameMath.raw(st.correct, st.wrong, st.hits, st.elapsed),
+      acc: GameMath.accuracy(st.correct, st.wrong, 1),
+      cons: GameMath.consistency(st.samples),
       correct: st.correct, wrong: st.wrong,
       hits: st.hits, misses: st.misses,
       maxCombo: st.maxCombo, score: st.score,
       time: st.elapsed,
       samples: st.samples.slice(),
       errorsAt: st.errorsAt.slice(),
+      keyHit: st.keyHit, keyMiss: st.keyMiss,
     };
     if (hooks.onEnd) hooks.onEnd(res);
   }

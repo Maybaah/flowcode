@@ -59,36 +59,63 @@ const Words = (() => {
     "clear","recent","late","single","hard","real","best","only","sure","full",
   ];
 
-  const LISTS = { ru: RU, en: EN };
+  // code tokens: single "words" with the symbols real code makes you type
+  const CODE = [
+    "const","let","var","function","return","if(x)","else","for(;;)","while","do",
+    "=>","async","await","import","export","class","null","true","false","void",
+    "x++","i--","a+=b","n-=1","x*=2","arr[i]","obj.key","foo()","bar(x)","()=>{}",
+    "[1,2,3]","{a:1}","a&&b","x||y","a===b","x!==y","a<=b","c>=d","!done","x??y",
+    "?.","...args","typeof","new","this","super()","try{","catch(e)","throw","finally",
+    "<div>","</div>","<br/>","#root",".class","::after","@media","!important","href","src=\"\"",
+    "npm","git","sudo","echo","grep","curl","chmod","mkdir","cd..","ls-la",
+    "def","lambda","print()","range()","len(x)","try:","except:","elif","yield","self",
+    "fn","mut","impl","pub","use","&str","i32","Vec<T>","Some(x)","None",
+    "Ok(())","match","enum","struct","trait","int","char*","size_t","nullptr","auto",
+    "SELECT","FROM","WHERE","JOIN","LIMIT","INSERT","UPDATE","DELETE","INDEX","NULL",
+  ];
+
+  const LISTS = { ru: RU, en: EN, code: CODE };
   const PUNCT = [",", ",", ".", ".", "!", "?", ";", ":"];
 
-  function base(cfg) {
-    const list = LISTS[cfg.lang] || RU;
-    return list[(Math.random() * list.length) | 0];
+  function pick(list, rnd) {
+    return list[(rnd() * list.length) | 0];
   }
 
-  function next(cfg) {
-    if (cfg.nums && Math.random() < 0.15) {
-      return String(10 + Math.floor(Math.random() * 9990));
+  function next(cfg, rnd = Math.random) {
+    // pasted custom text overrides everything
+    if (cfg.customList && cfg.customList.length) return pick(cfg.customList, rnd);
+
+    const list = LISTS[cfg.lang] || EN;
+    if (cfg.lang === "code") return pick(CODE, rnd);
+
+    if (cfg.nums && rnd() < 0.15) {
+      return String(10 + Math.floor(rnd() * 9990));
     }
-    let w = base(cfg);
+    let w = pick(list, rnd);
+    // adaptive: sometimes steer toward the player's weakest keys
+    if (cfg.weakChars && cfg.weakChars.length && rnd() < 0.3) {
+      for (let i = 0; i < 12; i++) {
+        const t = pick(list, rnd);
+        if (cfg.weakChars.some(ch => t.includes(ch))) { w = t; break; }
+      }
+    }
     if (cfg.punct) {
-      if (Math.random() < 0.15) w = w[0].toUpperCase() + w.slice(1);
-      const r = Math.random();
+      if (rnd() < 0.15) w = w[0].toUpperCase() + w.slice(1);
+      const r = rnd();
       if (r < 0.1) w = "(" + w + ")";
-      else if (r < 0.4) w += PUNCT[(Math.random() * PUNCT.length) | 0];
+      else if (r < 0.4) w += PUNCT[(rnd() * PUNCT.length) | 0];
     }
     return w;
   }
 
   // short clean word — used for power-up cubes
-  function shortWord(cfg) {
-    const list = LISTS[cfg.lang] || RU;
+  function shortWord(cfg, rnd = Math.random) {
+    const list = (cfg.customList && cfg.customList.length) ? cfg.customList : (LISTS[cfg.lang] || EN);
     for (let i = 0; i < 40; i++) {
-      const w = list[(Math.random() * list.length) | 0];
+      const w = pick(list, rnd);
       if (w.length >= 3 && w.length <= 5) return w;
     }
-    return base(cfg);
+    return pick(list, rnd);
   }
 
   return { next, shortWord, LISTS };

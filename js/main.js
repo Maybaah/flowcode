@@ -7,11 +7,14 @@
   const SETTINGS_KEY = "fc-settings";
   const HIST_KEY = "fc-history";
   const BEST_KEY = "fc-best";
+  const KEYS_KEY = "fc-keystats";
+  const CUSTOM_KEY = "fc-custom";
 
   const DEFAULTS = {
     mode: "time", time: 30, words: 25,
     punct: false, nums: false, lang: "en",
     flow: 40, theme: "midnight", sound: true,
+    focus: false, custom: false,
   };
 
   let S = loadJSON(SETTINGS_KEY, DEFAULTS);
@@ -42,6 +45,8 @@
     $("#cfg-words").classList.toggle("hidden", S.mode !== "words");
     $("#tg-punct").classList.toggle("on", S.punct);
     $("#tg-nums").classList.toggle("on", S.nums);
+    $("#tg-focus").classList.toggle("on", S.focus);
+    $("#tg-custom").classList.toggle("on", S.custom);
     $$("#cfg-lang .pill").forEach(b => b.classList.toggle("on", b.dataset.lang === S.lang));
     $("#wpm-slider").value = S.flow;
     $("#wpm-value").textContent = S.flow;
@@ -63,6 +68,11 @@
   $$("#cfg-words .pill").forEach(b => b.onclick = () => { S.words = +b.dataset.words; applySettings(); saveSettings(); });
   $("#tg-punct").onclick = () => { S.punct = !S.punct; applySettings(); saveSettings(); };
   $("#tg-nums").onclick = () => { S.nums = !S.nums; applySettings(); saveSettings(); };
+  $("#tg-focus").onclick = () => { S.focus = !S.focus; applySettings(); saveSettings(); };
+  $("#tg-custom").onclick = () => {
+    if (S.custom) { S.custom = false; applySettings(); saveSettings(); }
+    else openCustomModal();
+  };
   $$("#cfg-lang .pill").forEach(b => b.onclick = () => { S.lang = b.dataset.lang; applySettings(); saveSettings(); });
   $("#wpm-slider").oninput = e => {
     S.flow = +e.target.value;
@@ -82,6 +92,81 @@
     }
   });
 
+  /* ── custom text modal ── */
+
+  function customList() {
+    const raw = localStorage.getItem(CUSTOM_KEY) || "";
+    return raw.split(/\s+/).map(w => w.slice(0, 16)).filter(Boolean);
+  }
+
+  function openCustomModal() {
+    $("#custom-text").value = localStorage.getItem(CUSTOM_KEY) || "";
+    $("#custom-modal").classList.remove("hidden");
+    $("#custom-text").focus();
+  }
+
+  function closeCustomModal() {
+    $("#custom-modal").classList.add("hidden");
+    $("#custom-text").blur();
+  }
+
+  $("#custom-save").onclick = () => {
+    const raw = $("#custom-text").value.trim();
+    const words = raw.split(/\s+/).filter(Boolean);
+    if (words.length < 10) {
+      $("#custom-text").placeholder = "need at least 10 words — paste a longer text";
+      $("#custom-text").value = raw;
+      return;
+    }
+    try { localStorage.setItem(CUSTOM_KEY, raw); } catch {}
+    S.custom = true;
+    applySettings(); saveSettings();
+    closeCustomModal();
+  };
+  $("#custom-off").onclick = () => {
+    S.custom = false;
+    applySettings(); saveSettings();
+    closeCustomModal();
+  };
+
+  /* ── per-key stats ── */
+
+  function mergeKeyStats(keyHit, keyMiss) {
+    const st = loadJSON(KEYS_KEY, {});
+    for (const [ch, n] of Object.entries(keyHit)) {
+      (st[ch] = st[ch] || [0, 0])[0] += n;
+    }
+    for (const [ch, n] of Object.entries(keyMiss)) {
+      (st[ch] = st[ch] || [0, 0])[1] += n;
+    }
+    saveJSON(KEYS_KEY, st);
+    return st;
+  }
+
+  // chars ranked by miss rate; only keys seen enough to mean something
+  function weakKeys(minPresses = 8) {
+    const st = loadJSON(KEYS_KEY, {});
+    return Object.entries(st)
+      .map(([ch, [hit, miss]]) => ({ ch, hit, miss, total: hit + miss, rate: miss / (hit + miss) }))
+      .filter(k => k.total >= minPresses && k.miss > 0)
+      .sort((a, b) => b.rate - a.rate);
+  }
+
+  function renderWeakKeys() {
+    const wrap = $("#res-weak-wrap");
+    const box = $("#res-weak");
+    const top = weakKeys().slice(0, 6);
+    wrap.classList.toggle("hidden", top.length === 0);
+    box.innerHTML = "";
+    for (const k of top) {
+      const chip = document.createElement("span");
+      chip.className = "weak-chip";
+      chip.innerHTML = `<b>${k.ch === " " ? "␣" : k.ch}</b> ${Math.round(k.rate * 100)}%`;
+      chip.title = `${k.miss} missed of ${k.total} presses`;
+      box.appendChild(chip);
+    }
+  }
+
   /* ── effect banner ── */
 
   let bannerT = 0;
@@ -98,11 +183,13 @@
 
   /* ── HUD ── */
 
-  const PRIMARY_LABEL = { time: "sec", words: "left", endless: "words", sudden: "words", ramp: "words", zen: "sec" };
+  const PRIMARY_LABEL = { time: "sec", words: "left", endless: "words", sudden: "words", ramp: "words", zen: "sec", daily: "sec" };
+  const DAILY = { time: 60, flow: 50, lang: "en" };
 
   function onHud(h) {
     let primary;
     if (S.mode === "time") primary = Math.max(0, Math.ceil(S.time - h.elapsed));
+    else if (S.mode === "daily") primary = Math.max(0, Math.ceil(DAILY.time - h.elapsed));
     else if (S.mode === "words") primary = Math.max(0, S.words - h.hits - h.misses);
     else if (S.mode === "zen") primary = Math.floor(h.elapsed);
     else primary = h.hits;
@@ -131,10 +218,23 @@
     $("#hud-lives-wrap").classList.toggle("hidden", !livesMode);
     $("#hud-flow-wrap").classList.toggle("hidden", S.mode !== "ramp");
     $("#buffer").textContent = "";
-    Game.start(
-      { mode: S.mode, time: S.time, words: S.words, punct: S.punct, nums: S.nums, lang: S.lang, flow: S.flow },
-      { onHud, onEnd, onBanner: banner },
-    );
+    let cfg;
+    if (S.mode === "daily") {
+      // fixed and seeded so every player gets the same run today
+      cfg = {
+        mode: "daily", time: DAILY.time, flow: DAILY.flow, lang: DAILY.lang,
+        punct: false, nums: false,
+        seed: GameMath.dateSeed(new Date()), noPowerups: true,
+      };
+    } else {
+      cfg = {
+        mode: S.mode, time: S.time, words: S.words,
+        punct: S.punct, nums: S.nums, lang: S.lang, flow: S.flow,
+        customList: S.custom ? customList() : null,
+        weakChars: S.focus ? weakKeys().slice(0, 3).map(k => k.ch) : null,
+      };
+    }
+    Game.start(cfg, { onHud, onEnd, onBanner: banner });
   }
 
   function toIdle() {
@@ -170,11 +270,17 @@
     $("#hud").classList.add("hidden");
     $("#pause-overlay").classList.add("hidden");
 
+    mergeKeyStats(res.keyHit || {}, res.keyMiss || {});
+
     const meaningful = res.time >= 10 || res.hits >= 10;
     let isPB = false;
     if (meaningful) {
       const best = loadJSON(BEST_KEY, {});
-      const key = `${res.mode}|${res.mode === "time" ? S.time : res.mode === "words" ? S.words : "-"}|${res.lang}|${res.flow}`;
+      const param = res.mode === "time" ? S.time
+        : res.mode === "words" ? S.words
+        : res.mode === "daily" ? res.seed
+        : "-";
+      const key = `${res.mode}|${param}|${res.lang}|${res.flow}`;
       if (res.wpm > (best[key] || 0)) {
         best[key] = res.wpm;
         saveJSON(BEST_KEY, best);
@@ -198,6 +304,10 @@
     $("#res-time").textContent = res.time.toFixed(1) + "s";
     $("#res-pb").classList.toggle("hidden", !isPB);
 
+    $("#res-foot-note").textContent = res.mode === "daily"
+      ? `daily #${GameMath.dailyNumber(new Date())} · score ${res.score}`
+      : "";
+    renderWeakKeys();
     drawGraph(res);
     drawHistory(loadJSON(HIST_KEY, []));
     $("#results").classList.remove("hidden");
@@ -223,16 +333,23 @@
   }
 
   function drawGraph(res) {
-    const W = 760, H = 220;
-    const ctx = setupCanvas($("#res-graph"), W, H);
+    const ctx = setupCanvas($("#res-graph"), 760, 220);
+    graphCore(ctx, 0, 0, 760, 220, res);
+  }
+
+  // shared by the results screen and the share card
+  function graphCore(ctx, ox, oy, W, H, res) {
     const L = 46, R = 16, T = 18, B = 30;
     const samples = res.samples;
+    ctx.save();
+    ctx.translate(ox, oy);
     ctx.font = "11px 'JetBrains Mono', monospace";
 
     if (samples.length < 2) {
       ctx.fillStyle = cssVar("--dim");
       ctx.textAlign = "center";
       ctx.fillText("run too short to chart", W / 2, H / 2);
+      ctx.restore();
       return;
     }
 
@@ -311,7 +428,99 @@
       ctx.moveTo(x + 4, y - 4); ctx.lineTo(x - 4, y + 4);
       ctx.stroke();
     }
+    ctx.restore();
   }
+
+  /* ── share card ── */
+
+  function drawCard(res) {
+    const W = 1000, H = 520;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const bg = cssVar("--bg"), panel = cssVar("--panel"), line = cssVar("--line");
+    const text = cssVar("--text"), dim = cssVar("--dim"), accent = cssVar("--accent");
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(6, 6, W - 12, H - 12, 18); ctx.stroke();
+
+    // wordmark
+    ctx.save();
+    ctx.translate(52, 44);
+    ctx.rotate(-8 * Math.PI / 180);
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.roundRect(-13, -13, 26, 26, 7); ctx.fill();
+    ctx.restore();
+    ctx.font = "500 30px 'Chakra Petch', monospace";
+    ctx.textAlign = "left";
+    ctx.fillStyle = dim;
+    ctx.fillText("flow", 84, 55);
+    ctx.font = "700 30px 'Chakra Petch', monospace";
+    ctx.fillStyle = text;
+    ctx.fillText("code", 145, 55);
+
+    // context line
+    const when = new Date().toISOString().slice(0, 10);
+    const label = res.mode === "daily"
+      ? `daily #${GameMath.dailyNumber(new Date())} · ${when}`
+      : `${res.mode} · ${res.lang} · flow ${res.flow} wpm · ${when}`;
+    ctx.font = "15px 'JetBrains Mono', monospace";
+    ctx.fillStyle = dim;
+    ctx.textAlign = "right";
+    ctx.fillText(label, W - 48, 55);
+
+    // headline numbers
+    ctx.textAlign = "left";
+    ctx.font = "700 96px 'Chakra Petch', monospace";
+    ctx.fillStyle = accent;
+    ctx.fillText(String(res.wpm), 48, 190);
+    ctx.font = "13px 'JetBrains Mono', monospace";
+    ctx.fillStyle = dim;
+    ctx.fillText("WPM", 52, 214);
+
+    const cols = [
+      [res.acc + "%", "accuracy"], [res.raw, "raw"], [res.cons + "%", "consistency"],
+      [res.maxCombo, "max combo"], [res.score, "score"],
+    ];
+    let cx0 = 320;
+    for (const [v, lbl] of cols) {
+      ctx.font = "700 40px 'Chakra Petch', monospace";
+      ctx.fillStyle = text;
+      ctx.fillText(String(v), cx0, 175);
+      ctx.font = "12px 'JetBrains Mono', monospace";
+      ctx.fillStyle = dim;
+      ctx.fillText(lbl, cx0 + 1, 200);
+      cx0 += 135;
+    }
+
+    // graph panel
+    ctx.fillStyle = panel;
+    ctx.beginPath(); ctx.roundRect(40, 240, W - 80, 220, 14); ctx.fill();
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(40, 240, W - 80, 220, 14); ctx.stroke();
+    graphCore(ctx, 40, 240, W - 80, 220, res);
+
+    ctx.font = "13px 'JetBrains Mono', monospace";
+    ctx.fillStyle = dim;
+    ctx.textAlign = "center";
+    ctx.fillText("finish the word before its cube crosses the line — github.com/Maybaah/flowcode", W / 2, H - 26);
+    return cv;
+  }
+
+  $("#btn-card").onclick = () => {
+    if (!lastResults) return;
+    drawCard(lastResults).toBlob(blob => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `flowcode-${lastResults.wpm}wpm.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    });
+  };
 
   function drawHistory(hist) {
     const W = 760, H = 60;
@@ -349,6 +558,12 @@
     updateCaps(e);
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key;
+
+    // while the custom-text modal is open, keys belong to its textarea
+    if (!$("#custom-modal").classList.contains("hidden")) {
+      if (k === "Escape") { e.preventDefault(); closeCustomModal(); }
+      return;
+    }
 
     if (k === "Tab") {
       e.preventDefault();
@@ -421,4 +636,8 @@
 
   applySettings();
   toIdle();
+
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
 })();

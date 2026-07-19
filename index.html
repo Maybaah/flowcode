@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="A typing trainer where the words fight back: they fly at you in 3D cubes and you set the pace, 20–200 wpm.">
+<meta name="theme-color" content="#0b0e1a">
 <title>flowcode — 3d typing flow</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23ffb86b'/%3E%3Ctext x='16' y='22' font-size='16' font-family='monospace' text-anchor='middle' fill='%230b0e1a'%3Ef%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -27,6 +29,7 @@
       <button class="pill" data-mode="sudden">flawless</button>
       <button class="pill" data-mode="ramp">rush</button>
       <button class="pill" data-mode="zen">zen</button>
+      <button class="pill" data-mode="daily" title="same words for everyone today: 60s, 50 wpm, english">daily</button>
     </div>
     <div class="cfg-sep"></div>
     <div class="cfg-group" id="cfg-time">
@@ -45,11 +48,14 @@
     <div class="cfg-group" id="cfg-flags">
       <button class="pill" id="tg-punct" title="add punctuation">@ punct</button>
       <button class="pill" id="tg-nums" title="add numbers"># numbers</button>
+      <button class="pill" id="tg-focus" title="mix in words built from your weakest keys">✚ focus</button>
+      <button class="pill" id="tg-custom" title="type your own text">✎ text</button>
     </div>
     <div class="cfg-sep"></div>
     <div class="cfg-group" id="cfg-lang">
       <button class="pill" data-lang="en">eng</button>
       <button class="pill" data-lang="ru">rus</button>
+      <button class="pill" data-lang="code" title="code tokens: brackets, operators, keywords">code</button>
     </div>
     <div class="cfg-sep"></div>
     <div class="cfg-group wpm-group" title="flow speed: words per minute">
@@ -135,11 +141,15 @@
     <div class="res-cell"><label>score</label><span id="res-score">0</span></div>
     <div class="res-cell"><label>time</label><span id="res-time">0s</span></div>
   </div>
+  <div class="res-weak-wrap" id="res-weak-wrap">
+    <label>weakest keys</label>
+    <div id="res-weak"></div>
+  </div>
   <div class="res-history">
     <label>recent runs</label>
     <canvas id="res-history-chart" width="760" height="60"></canvas>
   </div>
-  <div class="res-foot"><kbd>tab</kbd> — next run</div>
+  <div class="res-foot"><span id="res-foot-note"></span><button id="btn-card" class="card-btn">⤓ save card</button><span><kbd>tab</kbd> — next run</span></div>
 </section>
 
 <!-- ══════════ THEME PICKER ══════════ -->
@@ -151,6 +161,19 @@
   <button data-theme="blood">blood</button>
 </div>
 
+<!-- ══════════ CUSTOM TEXT MODAL ══════════ -->
+<div id="custom-modal" class="overlay-center hidden">
+  <div class="modal-box">
+    <div class="modal-title">your own text</div>
+    <textarea id="custom-text" rows="6" spellcheck="false" placeholder="paste anything — song lyrics you wrote, an article, code… needs at least 10 words"></textarea>
+    <div class="modal-row">
+      <button id="custom-save" class="pill on">use this text</button>
+      <button id="custom-off" class="pill">back to word lists</button>
+    </div>
+    <div class="modal-hint">words fly out in random order · <kbd>esc</kbd> — close</div>
+  </div>
+</div>
+
 <footer id="footbar">
   <span class="foot-hint"><kbd>tab</kbd> restart · <kbd>esc</kbd> pause</span>
   <span class="foot-note">flowcode · 3d typing flow</span>
@@ -159,6 +182,7 @@
 <!-- mobile keyboard summoner -->
 <input id="mobile-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-hidden="true">
 
+<script src="js/stats.js"></script>
 <script src="js/words.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
