@@ -145,6 +145,15 @@
     <label>weakest keys</label>
     <div id="res-weak"></div>
   </div>
+  <div class="res-board-wrap hidden" id="res-board-wrap">
+    <label>daily leaderboard</label>
+    <div class="board-submit" id="board-submit">
+      <input id="board-name" type="text" maxlength="16" placeholder="your name" autocomplete="off" spellcheck="false">
+      <button id="board-send" class="pill on">submit run</button>
+      <span id="board-status"></span>
+    </div>
+    <ol id="res-board"></ol>
+  </div>
   <div class="res-history">
     <label>recent runs</label>
     <canvas id="res-history-chart" width="760" height="60"></canvas>
@@ -182,9 +191,11 @@
 <!-- mobile keyboard summoner -->
 <input id="mobile-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-hidden="true">
 
+<script src="js/config.js"></script>
 <script src="js/stats.js"></script>
 <script src="js/words.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/leaderboard.js"></script>
 <script src="js/game.js"></script>
 <script src="js/main.js"></script>
 </body>

@@ -167,6 +167,97 @@
     }
   }
 
+  /* ── daily leaderboard ── */
+
+  function medal(i) { return i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : String(i + 1); }
+
+  function boardStatus(text, kind) {
+    const el = $("#board-status");
+    el.textContent = text || "";
+    el.className = kind || "";
+  }
+
+  function renderBoard(data, mine) {
+    const list = $("#res-board");
+    list.innerHTML = "";
+    if (!data || !data.entries.length) {
+      const li = document.createElement("li");
+      li.className = "board-empty";
+      li.textContent = "no runs yet today — be the first";
+      list.appendChild(li);
+      return;
+    }
+    data.entries.forEach((e, i) => {
+      const li = document.createElement("li");
+      li.className = "board-row" + (mine && e.name === mine && i + 1 === lastRank ? " mine" : "");
+      li.innerHTML =
+        `<span class="board-rank">${medal(i)}</span>` +
+        `<span class="board-name"></span>` +
+        `<span class="board-score">${e.score}</span>` +
+        `<span class="board-meta">${e.wpm} wpm · ${e.acc}% · ${e.words}w</span>`;
+      li.querySelector(".board-name").textContent = e.name;
+      list.appendChild(li);
+    });
+  }
+
+  let lastRank = 0;
+
+  async function loadBoard() {
+    try {
+      boardStatus("loading…");
+      const data = await Leaderboard.top(lastResults && lastResults.seed);
+      boardStatus("");
+      renderBoard(data, Leaderboard.name());
+    } catch (err) {
+      boardStatus(err.message, "board-err");
+      renderBoard(null);
+    }
+  }
+
+  async function submitRun() {
+    if (!lastResults || lastResults.mode !== "daily") return;
+    const nameInput = $("#board-name");
+    const playerName = nameInput.value.trim();
+    if (!playerName) {
+      boardStatus("enter a name first", "board-err");
+      nameInput.focus();
+      return;
+    }
+    Leaderboard.name(playerName);
+    const btn = $("#board-send");
+    btn.disabled = true;
+    boardStatus("verifying…");
+    try {
+      const res = await Leaderboard.submit(lastResults, playerName);
+      lastRank = res.rank || 0;
+      boardStatus(`verified: ${res.verified.wpm} wpm · rank #${res.rank}`, "board-ok");
+      const data = await Leaderboard.top(lastResults.seed);
+      renderBoard(data, playerName);
+      btn.textContent = "submitted";
+    } catch (err) {
+      // the server recomputes the score, so a rejection means the run itself failed
+      boardStatus(err.status === 422 ? "run rejected: " + err.message : err.message, "board-err");
+      btn.disabled = false;
+    }
+  }
+
+  $("#board-send").onclick = submitRun;
+
+  function setupBoard(res) {
+    const wrap = $("#res-board-wrap");
+    const show = res.mode === "daily" && Leaderboard.enabled();
+    wrap.classList.toggle("hidden", !show);
+    if (!show) return;
+    const btn = $("#board-send");
+    btn.disabled = false;
+    btn.textContent = "submit run";
+    $("#board-name").value = Leaderboard.name();
+    lastRank = 0;
+    boardStatus("");
+    renderBoard(null);
+    loadBoard();
+  }
+
   /* ── effect banner ── */
 
   let bannerT = 0;
@@ -308,6 +399,7 @@
       ? `daily #${GameMath.dailyNumber(new Date())} · score ${res.score}`
       : "";
     renderWeakKeys();
+    setupBoard(res);
     drawGraph(res);
     drawHistory(loadJSON(HIST_KEY, []));
     $("#results").classList.remove("hidden");
@@ -562,6 +654,14 @@
     // while the custom-text modal is open, keys belong to its textarea
     if (!$("#custom-modal").classList.contains("hidden")) {
       if (k === "Escape") { e.preventDefault(); closeCustomModal(); }
+      return;
+    }
+
+    // typing a leaderboard name must not drive the game
+    const el = e.target;
+    if (el && el.id === "board-name") {
+      if (k === "Enter") { e.preventDefault(); submitRun(); }
+      else if (k === "Escape") el.blur();
       return;
     }
 

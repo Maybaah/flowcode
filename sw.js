@@ -1,12 +1,14 @@
 /* flowcode — service worker: precache the app, serve cache-first, work offline */
 "use strict";
-const CACHE = "flowcode-v1";
+const CACHE = "flowcode-v2";
 const ASSETS = [
   ".",
   "index.html",
   "style.css",
   "fonts.css",
   "manifest.webmanifest",
+  "js/config.js",
+  "js/leaderboard.js",
   "js/stats.js",
   "js/words.js",
   "js/audio.js",
@@ -38,6 +40,8 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET" || !e.request.url.startsWith(self.location.origin)) return;
+  // leaderboard traffic must always hit the network
+  if (new URL(e.request.url).pathname.includes("/api/")) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit => {
       if (hit) return hit;

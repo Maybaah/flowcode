@@ -67,7 +67,14 @@ const Game = (() => {
       samples: [], sampleAcc: 0, lastCum: 0,
       errorsAt: [],
       keyHit: {}, keyMiss: {},
-      rng: config.seed != null ? GameMath.mulberry32(config.seed) : Math.random,
+      // Seeded runs draw words from a list built purely from the seed, and use a
+      // separate rng for lanes/power-ups so play never perturbs the word order —
+      // that is what lets the server replay the run.
+      rng: config.seed != null ? GameMath.mulberry32(config.seed ^ 0x9e3779b9) : Math.random,
+      words: config.seed != null
+        ? Words.sequence(config, GameMath.mulberry32(config.seed), 400)
+        : null,
+      keys: [],
       freezeUntil: 0, slowUntil: 0, x2Until: 0,
       over: false,
     };
@@ -195,10 +202,14 @@ const Game = (() => {
       power = pool[(st.rng() * pool.length) | 0];
     }
     let word, tries = 0;
-    do {
-      word = power ? Words.shortWord(cfg, st.rng) : Words.next(cfg, st.rng);
-      tries++;
-    } while (tries < 16 && cubes.some(c => c.word === word || norm(c.word[0]) === norm(word[0])));
+    if (st.words) {
+      word = st.words[(st.spawned - 1) % st.words.length];
+    } else {
+      do {
+        word = power ? Words.shortWord(cfg, st.rng) : Words.next(cfg, st.rng);
+        tries++;
+      } while (tries < 16 && cubes.some(c => c.word === word || norm(c.word[0]) === norm(word[0])));
+    }
 
     const lane = pickLane();
     const c = {
@@ -289,6 +300,8 @@ const Game = (() => {
 
   function handleChar(ch) {
     if (!running || paused || st.over) return;
+    // keystroke tape — replayed server-side to verify leaderboard submissions
+    if (st.keys.length < 4000) st.keys.push([ch, Math.round(st.elapsed * 1000)]);
     if (!st.locked) {
       let best = null;
       for (const c of cubes) {
@@ -472,6 +485,7 @@ const Game = (() => {
       samples: st.samples.slice(),
       errorsAt: st.errorsAt.slice(),
       keyHit: st.keyHit, keyMiss: st.keyMiss,
+      keys: st.keys,
     };
     if (hooks.onEnd) hooks.onEnd(res);
   }

@@ -1,0 +1,13 @@
+name = "flowcode-leaderboard"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+# Created with:  wrangler d1 create flowcode
+# Paste the id the command prints into database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "flowcode"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[observability]
+enabled = true

@@ -69,7 +69,7 @@ That first letter **locks onto the nearest matching cube**, and everything you t
 | **flawless** | One typo or one escaped cube and it's over. |
 | **rush** | Flow speeds up by 4 wpm every 8 seconds. Three lives. Find your ceiling. |
 | **zen** | No timer, no limit, no lives. Stop when you want to. |
-| **daily** | The same seeded 60-second run for everyone, every day. Fixed 50 wpm flow, English words, no power-ups — compare scores fairly. |
+| **daily** | The same seeded 60-second run for everyone, every day. Fixed 50 wpm flow, English words, no power-ups — compare scores fairly, with an optional global leaderboard. |
 
 ## Power-up cubes
 
@@ -149,6 +149,21 @@ And **✎ text** lets you paste anything of your own — an article, lyrics, cod
 </details>
 
 <details>
+<summary><b>The daily leaderboard, and why it can't be cheated with devtools</b></summary>
+
+<br>
+
+Optional, and off unless you deploy it — see [`worker/`](worker/). The game itself stays a static site; the leaderboard is a small Cloudflare Worker with a D1 database.
+
+The interesting part is what gets submitted. A browser game can't be trusted to report its own score, so flowcode **doesn't send one**. It sends the keystroke tape — what you typed and when — and the server decides what it was worth.
+
+That works because a daily run is fully reproducible: the word list is derived from the UTC date, cubes spawn on a fixed cadence, and each lives a fixed time. From the day alone the Worker rebuilds the exact run you played, replays your keystrokes against it with the same lock-on, expiry and combo rules, and computes the score itself. `fetch('/api/submit', {wpm: 9999})` gets you nothing, because there is no wpm field to forge.
+
+Tapes are also checked for physical plausibility: nothing faster than 12 ms between keys, no machine-flat cadence within a word, nothing longer than the time limit, nothing above 300 wpm. A patient bot could still synthesise human-looking timings — this isn't anti-cheat for money, it's anti-cheat for a console one-liner, which is the attack that actually happens.
+
+</details>
+
+<details>
 <summary><b>Weak keys &amp; adaptive practice</b></summary>
 
 <br>
@@ -171,13 +186,17 @@ fonts.css             self-hosted @font-face (no CDN)
 manifest.webmanifest  PWA manifest
 sw.js                 service worker: precache, offline
 assets/               hero art, icons, woff2 fonts
-js/stats.js           pure game math (shared with tests)
+js/config.js          leaderboard URL — empty means fully offline
+js/stats.js           pure game math (shared with the server and tests)
+js/words.js           word lists, generator, seeded sequences
+js/verify.js          replay verification for leaderboard submissions
 js/game.js            engine — spawn, motion, input, scoring
 js/main.js            UI, settings, results, charts, share card
-js/words.js           word lists and generator
+js/leaderboard.js     leaderboard API client
 js/audio.js           WebAudio sound effects
 server.js             static dev server
-tests/                unit tests: node --test tests/stats.test.js
+worker/               optional Cloudflare Worker + D1 for the daily leaderboard
+tests/                unit tests: node --test tests/stats.test.js tests/verify.test.js
 ```
 
 </details>

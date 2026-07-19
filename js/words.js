@@ -1,6 +1,12 @@
 "use strict";
-/* flowcode — word lists and flow generator */
-const Words = (() => {
+/* flowcode — word lists and flow generator.
+   Loaded as a plain script in the browser and imported by the leaderboard
+   Worker, so a seeded run can be regenerated server-side for verification. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  if (root) root.Words = api;
+})(typeof self !== "undefined" ? self : globalThis, function () {
   const RU = [
     "время","человек","жизнь","день","рука","работа","слово","место","лицо","друг",
     "глаз","вопрос","дом","сторона","страна","мир","случай","голова","сила","конец",
@@ -118,5 +124,27 @@ const Words = (() => {
     return pick(list, rnd);
   }
 
-  return { next, shortWord, LISTS };
-})();
+  // Deterministic word run for a seeded challenge.
+  // Depends only on rnd and the words already emitted, so the server can
+  // rebuild the exact same sequence from the day's seed.
+  function sequence(cfg, rnd, count) {
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      let w, tries = 0;
+      do {
+        w = next(cfg, rnd);
+        tries++;
+      } while (tries < 8 && clashes(out, w));
+      out.push(w);
+    }
+    return out;
+  }
+
+  // avoid a first letter already used by the last few words — keeps lock-on unambiguous
+  function clashes(out, w) {
+    const tail = out.slice(-3);
+    return tail.some(p => p === w || p[0].toLowerCase() === w[0].toLowerCase());
+  }
+
+  return { next, shortWord, sequence, LISTS };
+});
