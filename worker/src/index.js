@@ -17,6 +17,12 @@ const MAX_BODY = 128 * 1024;   // a full tape is a few KB; this is generous
 const MAX_PER_IP_PER_DAY = 40;
 const TOP_N = 50;
 
+const TOP_QUERY =
+  `SELECT name, wpm, acc, score, words, max_combo AS maxCombo, created_at AS at
+     FROM scores WHERE day = ?1
+    ORDER BY score DESC, wpm DESC, created_at ASC
+    LIMIT ?2`;
+
 function cors(origin) {
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -28,11 +34,27 @@ function cors(origin) {
   };
 }
 
-function json(body, status, origin) {
+function json(body, status, origin, extra) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...cors(origin) },
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      ...cors(origin),
+      ...extra,
+    },
   });
+}
+
+/* Throttling needs to recognise a repeat caller, not identify a person, so the
+   address is never stored. The day is mixed in as a rotating salt, which also
+   means the counters cannot be correlated across days. */
+async function ipKey(ip, day, env) {
+  const salt = (env && env.RATE_SALT) || "flowcode";
+  const bytes = new TextEncoder().encode(`${salt}:${day}:${ip}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].slice(0, 12)
+    .map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 const todaySeed = () => GameMath.dateSeed(new Date());
@@ -51,26 +73,30 @@ async function handleLeaderboard(req, env, origin) {
   if (!Number.isInteger(day) || day < 20260101 || day > 21000101) {
     return json({ error: "bad day" }, 400, origin);
   }
-  const { results } = await env.DB.prepare(
-    `SELECT name, wpm, acc, score, words, max_combo AS maxCombo, created_at AS at
-       FROM scores WHERE day = ?1
-      ORDER BY score DESC, wpm DESC, created_at ASC
-      LIMIT ?2`
-  ).bind(day, TOP_N).all();
+  const { results } = await env.DB.prepare(TOP_QUERY).bind(day, TOP_N).all();
 
-  return json({ day, count: results.length, entries: results }, 200, origin);
+  return json({ day, count: results.length, entries: results }, 200, origin, {
+    "Cache-Control": "public, max-age=10",
+  });
 }
 
 /* ── POST /api/submit ── */
 async function handleSubmit(req, env, origin) {
-  const len = Number(req.headers.get("content-length") || 0);
-  if (len > MAX_BODY) return json({ error: "payload too large" }, 413, origin);
+  // content-length can be absent or wrong, so measure what actually arrived
+  const declared = Number(req.headers.get("content-length") || 0);
+  if (declared > MAX_BODY) return json({ error: "payload too large" }, 413, origin);
+
+  const raw = await req.text();
+  if (raw.length > MAX_BODY) return json({ error: "payload too large" }, 413, origin);
 
   let body;
   try {
-    body = await req.json();
+    body = JSON.parse(raw);
   } catch {
     return json({ error: "invalid json" }, 400, origin);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return json({ error: "invalid body" }, 400, origin);
   }
 
   const day = Number(body.day);
@@ -86,22 +112,35 @@ async function handleSubmit(req, env, origin) {
     return json({ error: "bad player id" }, 400, origin);
   }
 
-  // cheap per-IP throttle so a script cannot hammer the replay
-  const ip = req.headers.get("cf-connecting-ip") || "unknown";
-  const hit = await env.DB.prepare(
+  // A read straight after a write can land on a replica that has not caught up,
+  // which would tell a player who just placed first that the board is empty.
+  // Pinning this request to the primary gives it read-your-writes.
+  const db = typeof env.DB.withSession === "function"
+    ? env.DB.withSession("first-primary")
+    : env.DB;
+
+  // cheap per-caller throttle so a script cannot hammer the replay
+  const caller = await ipKey(req.headers.get("cf-connecting-ip") || "unknown", day, env);
+  const hit = await db.prepare(
     `INSERT INTO rate (ip, day, n) VALUES (?1, ?2, 1)
        ON CONFLICT(ip, day) DO UPDATE SET n = n + 1
      RETURNING n`
-  ).bind(ip, day).first();
+  ).bind(caller, day).first();
   if (hit && hit.n > MAX_PER_IP_PER_DAY) {
     return json({ error: "too many submissions today" }, 429, origin);
+  }
+
+  // counters are only useful while the challenge is open — drop the rest
+  if (Math.random() < 0.05) {
+    const cutoff = GameMath.dateSeed(new Date(Date.now() - 3 * 86400000));
+    await db.prepare(`DELETE FROM rate WHERE day < ?1`).bind(cutoff).run();
   }
 
   const run = Verify.replay(day, body.keys);
   if (!run.ok) return json({ error: "run rejected", reason: run.reason }, 422, origin);
 
   // one row per player per day; keep their best
-  await env.DB.prepare(
+  await db.prepare(
     `INSERT INTO scores (day, player, name, wpm, acc, score, words, max_combo, created_at)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
      ON CONFLICT(day, player) DO UPDATE SET
@@ -111,11 +150,19 @@ async function handleSubmit(req, env, origin) {
      WHERE excluded.score > scores.score`
   ).bind(day, player, name, run.wpm, run.acc, run.score, run.words, run.maxCombo, Date.now()).run();
 
-  const rank = await env.DB.prepare(
+  const rank = await db.prepare(
     `SELECT COUNT(*) + 1 AS rank FROM scores WHERE day = ?1 AND score > ?2`
   ).bind(day, run.score).first();
 
-  return json({ ok: true, verified: run, rank: rank ? rank.rank : null }, 200, origin);
+  // hand back the fresh board so the client never has to re-read a lagging replica
+  const { results } = await db.prepare(TOP_QUERY).bind(day, TOP_N).all();
+
+  return json({
+    ok: true,
+    verified: run,
+    rank: rank ? rank.rank : null,
+    entries: results,
+  }, 200, origin);
 }
 
 export default {
@@ -136,7 +183,9 @@ export default {
       }
       return json({ error: "not found" }, 404, origin);
     } catch (err) {
-      return json({ error: "internal", detail: String(err && err.message || err) }, 500, origin);
+      // log for the tail, but never hand internals to the caller
+      console.error("unhandled", err && err.stack || err);
+      return json({ error: "internal error" }, 500, origin);
     }
   },
 };

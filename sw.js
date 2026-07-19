@@ -1,6 +1,8 @@
 /* flowcode — service worker: precache the app, serve cache-first, work offline */
 "use strict";
-const CACHE = "flowcode-v2";
+/* Bump this whenever any precached file changes — the fetch handler is
+   cache-first, so a stale version would keep serving the old build. */
+const CACHE = "flowcode-v3";
 const ASSETS = [
   ".",
   "index.html",

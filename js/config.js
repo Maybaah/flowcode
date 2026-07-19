@@ -5,5 +5,5 @@
    paste the URL it prints here; leave it empty and the game runs exactly as
    before, with no network calls and no leaderboard UI. */
 window.FC_CONFIG = {
-  leaderboardApi: "",
+  leaderboardApi: "https://flowcode-leaderboard.maybeez.workers.dev",
 };

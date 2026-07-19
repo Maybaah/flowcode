@@ -190,12 +190,19 @@
     data.entries.forEach((e, i) => {
       const li = document.createElement("li");
       li.className = "board-row" + (mine && e.name === mine && i + 1 === lastRank ? " mine" : "");
-      li.innerHTML =
-        `<span class="board-rank">${medal(i)}</span>` +
-        `<span class="board-name"></span>` +
-        `<span class="board-score">${e.score}</span>` +
-        `<span class="board-meta">${e.wpm} wpm · ${e.acc}% · ${e.words}w</span>`;
-      li.querySelector(".board-name").textContent = e.name;
+      // every field is written as text — nothing from the API reaches the parser
+      const cell = (cls, text) => {
+        const s = document.createElement("span");
+        s.className = cls;
+        s.textContent = text;
+        return s;
+      };
+      li.append(
+        cell("board-rank", medal(i)),
+        cell("board-name", e.name),
+        cell("board-score", e.score),
+        cell("board-meta", `${e.wpm} wpm · ${e.acc}% · ${e.words}w`),
+      );
       list.appendChild(li);
     });
   }
@@ -231,8 +238,8 @@
       const res = await Leaderboard.submit(lastResults, playerName);
       lastRank = res.rank || 0;
       boardStatus(`verified: ${res.verified.wpm} wpm · rank #${res.rank}`, "board-ok");
-      const data = await Leaderboard.top(lastResults.seed);
-      renderBoard(data, playerName);
+      // the response carries the board as of the write, so no second read is needed
+      renderBoard(res.entries ? { entries: res.entries } : await Leaderboard.top(lastResults.seed), playerName);
       btn.textContent = "submitted";
     } catch (err) {
       // the server recomputes the score, so a rejection means the run itself failed
