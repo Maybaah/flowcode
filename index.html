@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="A typing trainer where the words fight back: they fly at you in 3D cubes and you set the pace, 20–200 wpm.">
+<meta name="description" content="A typing trainer where the words fight back: they fly at you in 3D cubes and you set the pace, 20-200 wpm.">
 <meta name="theme-color" content="#0b0e1a">
-<title>flowcode — 3d typing flow</title>
+<title>flowcode · 3d typing flow</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23ffb86b'/%3E%3Ctext x='16' y='22' font-size='16' font-family='monospace' text-anchor='middle' fill='%230b0e1a'%3Ef%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -29,7 +29,7 @@
       <button class="pill" data-mode="sudden">flawless</button>
       <button class="pill" data-mode="ramp">rush</button>
       <button class="pill" data-mode="zen">zen</button>
-      <button class="pill" data-mode="daily" title="same words for everyone today: 60s, 50 wpm, english">daily</button>
+      <button class="pill" data-mode="daily" title="same words for everyone today: 60s, english, flow ramps 45→80">daily</button>
     </div>
     <div class="cfg-sep"></div>
     <div class="cfg-group" id="cfg-time">
@@ -50,6 +50,7 @@
       <button class="pill" id="tg-nums" title="add numbers"># numbers</button>
       <button class="pill" id="tg-focus" title="mix in words built from your weakest keys">✚ focus</button>
       <button class="pill" id="tg-custom" title="type your own text">✎ text</button>
+      <button class="pill" id="tg-ranked" title="compete on today's board: seeded run, no power-ups, no modifiers">🏆 ranked</button>
     </div>
     <div class="cfg-sep"></div>
     <div class="cfg-group" id="cfg-lang">
@@ -67,6 +68,7 @@
   </nav>
 
   <div class="top-icons">
+    <button class="icon-btn coin-btn" id="btn-shop" title="coin shop" aria-label="shop">🪙 <span id="coin-count">0</span></button>
     <button class="icon-btn" id="btn-sound" title="sound on/off" aria-label="sound">♪</button>
     <button class="icon-btn" id="btn-theme" title="change theme" aria-label="theme">◐</button>
   </div>
@@ -97,7 +99,7 @@
   <!-- start hint -->
   <div id="start-hint" class="overlay-center">
     <div class="hint-kbd-row">
-      <div class="hint-title">start typing — <em>and the flow begins</em></div>
+      <div class="hint-title">start typing <em>and the flow begins</em></div>
       <div class="hint-sub">words fly out inside cubes and drift toward the horizon.<br>finish each word before its cube crosses the red line.</div>
       <div class="hint-keys">
         <span><kbd>tab</kbd> restart</span>
@@ -111,7 +113,7 @@
   <div id="pause-overlay" class="overlay-center hidden">
     <div class="pause-box">
       <div class="pause-title">paused</div>
-      <div class="pause-hint"><kbd>esc</kbd> — resume · <kbd>tab</kbd> — restart · <kbd>enter</kbd> — finish</div>
+      <div class="pause-hint"><kbd>esc</kbd> resume · <kbd>tab</kbd> restart · <kbd>enter</kbd> finish</div>
     </div>
   </div>
 
@@ -146,7 +148,7 @@
     <div id="res-weak"></div>
   </div>
   <div class="res-board-wrap hidden" id="res-board-wrap">
-    <label>daily leaderboard</label>
+    <label id="board-title">daily leaderboard</label>
     <div class="board-submit" id="board-submit">
       <input id="board-name" type="text" maxlength="16" placeholder="your name" autocomplete="off" spellcheck="false">
       <button id="board-send" class="pill on">submit run</button>
@@ -154,11 +156,12 @@
     </div>
     <ol id="res-board"></ol>
   </div>
+  <div id="rank-hint" class="rank-hint hidden"></div>
   <div class="res-history">
     <label>recent runs</label>
     <canvas id="res-history-chart" width="760" height="60"></canvas>
   </div>
-  <div class="res-foot"><span id="res-foot-note"></span><button id="btn-card" class="card-btn">⤓ save card</button><span><kbd>tab</kbd> — next run</span></div>
+  <div class="res-foot"><span id="res-foot-note"></span><span id="res-coins" class="res-coins"></span><button id="btn-card" class="card-btn">⤓ save card</button><span><kbd>tab</kbd> next run</span></div>
 </section>
 
 <!-- ══════════ THEME PICKER ══════════ -->
@@ -174,12 +177,24 @@
 <div id="custom-modal" class="overlay-center hidden">
   <div class="modal-box">
     <div class="modal-title">your own text</div>
-    <textarea id="custom-text" rows="6" spellcheck="false" placeholder="paste anything — song lyrics you wrote, an article, code… needs at least 10 words"></textarea>
+    <textarea id="custom-text" rows="6" spellcheck="false" placeholder="paste anything: song lyrics you wrote, an article, code… needs at least 10 words"></textarea>
     <div class="modal-row">
       <button id="custom-save" class="pill on">use this text</button>
       <button id="custom-off" class="pill">back to word lists</button>
     </div>
-    <div class="modal-hint">words fly out in random order · <kbd>esc</kbd> — close</div>
+    <div class="modal-hint">words fly out in random order · <kbd>esc</kbd> close</div>
+  </div>
+</div>
+
+<!-- ══════════ SHOP MODAL ══════════ -->
+<div id="shop-modal" class="overlay-center hidden">
+  <div class="modal-box shop-box">
+    <div class="modal-title">shop <span class="shop-coins">🪙 <b id="shop-coins">0</b></span></div>
+    <div id="shop-items"></div>
+    <div class="modal-row">
+      <button id="shop-close" class="pill">close</button>
+    </div>
+    <div class="modal-hint">finish runs to earn coins · <kbd>esc</kbd> close</div>
   </div>
 </div>
 
@@ -194,6 +209,7 @@
 <script src="js/config.js"></script>
 <script src="js/stats.js"></script>
 <script src="js/words.js"></script>
+<script src="js/verify.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/leaderboard.js"></script>
 <script src="js/game.js"></script>

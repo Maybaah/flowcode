@@ -1,7 +1,7 @@
 {
-  "name": "flowcode — 3d typing flow",
+  "name": "flowcode · 3d typing flow",
   "short_name": "flowcode",
-  "description": "A typing trainer where the words fight back: they fly at you in 3D cubes and you set the pace, 20–200 wpm.",
+  "description": "A typing trainer where the words fight back: they fly at you in 3D cubes and you set the pace, 20-200 wpm.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

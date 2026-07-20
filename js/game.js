@@ -1,5 +1,5 @@
 "use strict";
-/* flowcode — 3d typing flow engine */
+/* flowcode: 3d typing flow engine */
 const Game = (() => {
   const SPAWN_Z = 120;        // where a cube is born
   const MISS_Z = -2300;       // red horizon line (see style.css #horizon-line)
@@ -68,7 +68,7 @@ const Game = (() => {
       errorsAt: [],
       keyHit: {}, keyMiss: {},
       // Seeded runs draw words from a list built purely from the seed, and use a
-      // separate rng for lanes/power-ups so play never perturbs the word order —
+      // separate rng for lanes/power-ups so play never perturbs the word order;
       // that is what lets the server replay the run.
       rng: config.seed != null ? GameMath.mulberry32(config.seed ^ 0x9e3779b9) : Math.random,
       words: config.seed != null
@@ -112,8 +112,9 @@ const Game = (() => {
   function step(dt) {
     st.elapsed += dt;
 
-    if (cfg.mode === "ramp") {
-      st.flow = clamp(cfg.flow + 4 * Math.floor(st.elapsed / 8), cfg.flow, 260);
+    // rush and the daily challenge both speed up on a fixed schedule
+    if (cfg.ramp) {
+      st.flow = clamp(cfg.flow + cfg.ramp.step * Math.floor(st.elapsed / cfg.ramp.every), cfg.flow, cfg.ramp.cap);
     }
 
     const frozen = st.elapsed < st.freezeUntil;
@@ -129,12 +130,12 @@ const Game = (() => {
       }
     }
 
-    // motion
-    const v = speed(st.flow) * factor;
+    // motion: each cube keeps the speed it was born with, so a ramping flow
+    // stays exactly reproducible server-side (newer cubes simply fly faster)
     let danger = false;
     for (let i = cubes.length - 1; i >= 0; i--) {
       const c = cubes[i];
-      c.z -= v * dt;
+      c.z -= c.v * factor * dt;
       if (c.z <= MISS_Z) {
         missCube(c);
         if (st.over) return;
@@ -161,7 +162,7 @@ const Game = (() => {
       p.el.style.opacity = Math.min(1, p.life / 0.3);
     }
 
-    // sample wpm once per second — feeds the chart
+    // sample wpm once per second; feeds the chart
     st.sampleAcc += dt;
     if (st.sampleAcc >= 1) {
       st.sampleAcc -= 1;
@@ -213,7 +214,7 @@ const Game = (() => {
 
     const lane = pickLane();
     const c = {
-      word, power, lane, z: SPAWN_Z, typed: 0,
+      word, power, lane, z: SPAWN_Z, v: speed(st.flow), typed: 0,
       born: st.elapsed, phase: Math.random() * 6.28, danger: false,
       el: null, letters: null,
     };
@@ -298,10 +299,15 @@ const Game = (() => {
 
   const bump = (map, ch) => { const k = norm(ch).toLowerCase(); map[k] = (map[k] || 0) + 1; };
 
+  // keystroke tape, replayed server-side to verify leaderboard submissions;
+  // " " and "\b" mark target drops and backspaces so replay lock state matches
+  function tape(ch) {
+    if (st.keys.length < 4000) st.keys.push([ch, Math.round(st.elapsed * 1000)]);
+  }
+
   function handleChar(ch) {
     if (!running || paused || st.over) return;
-    // keystroke tape — replayed server-side to verify leaderboard submissions
-    if (st.keys.length < 4000) st.keys.push([ch, Math.round(st.elapsed * 1000)]);
+    tape(ch);
     if (!st.locked) {
       let best = null;
       for (const c of cubes) {
@@ -346,7 +352,9 @@ const Game = (() => {
   }
 
   function resetLock() {
-    const c = st && st.locked;
+    if (!running || paused || !st || st.over) return;
+    tape(" ");
+    const c = st.locked;
     if (!c) return;
     c.typed = 0;
     st.locked = null;
@@ -355,7 +363,9 @@ const Game = (() => {
   }
 
   function backspace() {
-    const c = st && st.locked;
+    if (!running || paused || !st || st.over) return;
+    tape("\b");
+    const c = st.locked;
     if (!c || c.typed === 0) return;
     c.typed--;
     updateLetters(c);
@@ -474,6 +484,8 @@ const Game = (() => {
     const res = {
       reason, mode: cfg.mode, lang: cfg.lang, flow: cfg.flow,
       seed: cfg.seed != null ? cfg.seed : null,
+      ranked: !!cfg.ranked,
+      timeSet: cfg.time || 0, wordsSet: cfg.words || 0,
       wpm: GameMath.wpm(st.correct, st.hits, st.elapsed),
       raw: GameMath.raw(st.correct, st.wrong, st.hits, st.elapsed),
       acc: GameMath.accuracy(st.correct, st.wrong, 1),

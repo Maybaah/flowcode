@@ -1,5 +1,5 @@
 "use strict";
-/* flowcode — sound (WebAudio, no asset files) */
+/* flowcode: sound (WebAudio, no asset files) */
 const Sfx = (() => {
   let ctx = null, master = null, on = true;
 

@@ -1,5 +1,5 @@
 "use strict";
-/* flowcode — deployment config.
+/* flowcode: deployment config.
 
    The daily leaderboard is optional. Deploy worker/ (see worker/README.md) and
    paste the URL it prints here; leave it empty and the game runs exactly as

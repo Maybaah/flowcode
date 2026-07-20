@@ -1,5 +1,5 @@
 "use strict";
-/* flowcode — pure game math, shared by the engine and the node test suite */
+/* flowcode: pure game math, shared by the engine and the node test suite */
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;

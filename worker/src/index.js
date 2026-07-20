@@ -1,8 +1,9 @@
-/* flowcode leaderboard — Cloudflare Worker + D1.
+/* flowcode leaderboard: Cloudflare Worker + D1.
 
-   Clients submit the keystroke tape of a daily run, never a score. The Worker
-   rebuilds that day's word sequence from its seed, replays the tape, and stores
-   the score it computed itself. See js/verify.js for the replay. */
+   Clients submit the keystroke tape of a ranked run, never a score. The Worker
+   rebuilds that run's word sequence from its seed, replays the tape, and stores
+   the score it computed itself. Every mode has its own daily board.
+   See js/verify.js for the replay. */
 "use strict";
 import Verify from "../../js/verify.js";
 import GameMath from "../../js/stats.js";
@@ -13,15 +14,16 @@ const ALLOWED_ORIGINS = [
   "http://127.0.0.1:4173",
 ];
 
+const PROTOCOL = 2;            // bumped when the replay rules change
 const MAX_BODY = 128 * 1024;   // a full tape is a few KB; this is generous
-const MAX_PER_IP_PER_DAY = 40;
+const MAX_PER_IP_PER_DAY = 60;
 const TOP_N = 50;
 
 const TOP_QUERY =
-  `SELECT name, wpm, acc, score, words, max_combo AS maxCombo, created_at AS at
-     FROM scores WHERE day = ?1
+  `SELECT name, wpm, acc, score, words, max_combo AS maxCombo, flow, created_at AS at
+     FROM scores WHERE day = ?1 AND mode = ?2
     ORDER BY score DESC, wpm DESC, created_at ASC
-    LIMIT ?2`;
+    LIMIT ?3`;
 
 function cors(origin) {
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -65,7 +67,7 @@ function yesterdaySeed() {
   return GameMath.dateSeed(d);
 }
 
-/* ── GET /api/leaderboard?day=YYYYMMDD ── */
+/* ── GET /api/leaderboard?day=YYYYMMDD&mode=time ── */
 async function handleLeaderboard(req, env, origin) {
   const url = new URL(req.url);
   const raw = url.searchParams.get("day");
@@ -73,9 +75,12 @@ async function handleLeaderboard(req, env, origin) {
   if (!Number.isInteger(day) || day < 20260101 || day > 21000101) {
     return json({ error: "bad day" }, 400, origin);
   }
-  const { results } = await env.DB.prepare(TOP_QUERY).bind(day, TOP_N).all();
+  const mode = url.searchParams.get("mode") || "daily";
+  if (!Verify.MODES[mode]) return json({ error: "bad mode" }, 400, origin);
 
-  return json({ day, count: results.length, entries: results }, 200, origin, {
+  const { results } = await env.DB.prepare(TOP_QUERY).bind(day, mode, TOP_N).all();
+
+  return json({ day, mode, count: results.length, entries: results }, 200, origin, {
     "Cache-Control": "public, max-age=10",
   });
 }
@@ -99,6 +104,10 @@ async function handleSubmit(req, env, origin) {
     return json({ error: "invalid body" }, 400, origin);
   }
 
+  if (body.v !== PROTOCOL) {
+    return json({ error: "client out of date, reload the page" }, 400, origin);
+  }
+
   const day = Number(body.day);
   if (day !== todaySeed() && day !== yesterdaySeed()) {
     return json({ error: "that challenge is closed" }, 400, origin);
@@ -111,6 +120,14 @@ async function handleSubmit(req, env, origin) {
   if (!/^[a-zA-Z0-9-]{8,64}$/.test(player)) {
     return json({ error: "bad player id" }, 400, origin);
   }
+
+  const conf = Verify.checkConfig({
+    mode: body.mode, day,
+    seed: body.seed, flow: body.flow,
+    time: body.time, words: body.words, lang: body.lang,
+  });
+  if (!conf.ok) return json({ error: "run rejected", reason: conf.reason }, 422, origin);
+  const cfg = conf.cfg;
 
   // A read straight after a write can land on a replica that has not caught up,
   // which would tell a player who just placed first that the board is empty.
@@ -130,32 +147,33 @@ async function handleSubmit(req, env, origin) {
     return json({ error: "too many submissions today" }, 429, origin);
   }
 
-  // counters are only useful while the challenge is open — drop the rest
+  // counters are only useful while the challenge is open, so drop the rest
   if (Math.random() < 0.05) {
     const cutoff = GameMath.dateSeed(new Date(Date.now() - 3 * 86400000));
     await db.prepare(`DELETE FROM rate WHERE day < ?1`).bind(cutoff).run();
   }
 
-  const run = Verify.replay(day, body.keys);
+  const run = Verify.replay(cfg, body.keys);
   if (!run.ok) return json({ error: "run rejected", reason: run.reason }, 422, origin);
 
-  // one row per player per day; keep their best
+  // one row per player per board; keep their best
   await db.prepare(
-    `INSERT INTO scores (day, player, name, wpm, acc, score, words, max_combo, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-     ON CONFLICT(day, player) DO UPDATE SET
+    `INSERT INTO scores (day, mode, player, name, wpm, acc, score, words, max_combo, flow, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+     ON CONFLICT(day, mode, player) DO UPDATE SET
        name = excluded.name, wpm = excluded.wpm, acc = excluded.acc,
        score = excluded.score, words = excluded.words,
-       max_combo = excluded.max_combo, created_at = excluded.created_at
+       max_combo = excluded.max_combo, flow = excluded.flow,
+       created_at = excluded.created_at
      WHERE excluded.score > scores.score`
-  ).bind(day, player, name, run.wpm, run.acc, run.score, run.words, run.maxCombo, Date.now()).run();
+  ).bind(day, cfg.mode, player, name, run.wpm, run.acc, run.score, run.words, run.maxCombo, cfg.flow, Date.now()).run();
 
   const rank = await db.prepare(
-    `SELECT COUNT(*) + 1 AS rank FROM scores WHERE day = ?1 AND score > ?2`
-  ).bind(day, run.score).first();
+    `SELECT COUNT(*) + 1 AS rank FROM scores WHERE day = ?1 AND mode = ?2 AND score > ?3`
+  ).bind(day, cfg.mode, run.score).first();
 
   // hand back the fresh board so the client never has to re-read a lagging replica
-  const { results } = await db.prepare(TOP_QUERY).bind(day, TOP_N).all();
+  const { results } = await db.prepare(TOP_QUERY).bind(day, cfg.mode, TOP_N).all();
 
   return json({
     ok: true,
@@ -179,7 +197,7 @@ export default {
         return await handleSubmit(req, env, origin);
       }
       if (req.method === "GET" && pathname === "/api/health") {
-        return json({ ok: true, day: todaySeed() }, 200, origin);
+        return json({ ok: true, day: todaySeed(), v: PROTOCOL }, 200, origin);
       }
       return json({ error: "not found" }, 404, origin);
     } catch (err) {

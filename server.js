@@ -1,4 +1,4 @@
-/* flowcode — minimal static dev server */
+/* flowcode: minimal static dev server */
 "use strict";
 const http = require("http");
 const fs = require("fs");

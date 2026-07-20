@@ -1,5 +1,5 @@
 "use strict";
-/* flowcode — word lists and flow generator.
+/* flowcode: word lists and flow generator.
    Loaded as a plain script in the browser and imported by the leaderboard
    Worker, so a seeded run can be regenerated server-side for verification. */
 (function (root, factory) {
@@ -114,7 +114,7 @@
     return w;
   }
 
-  // short clean word — used for power-up cubes
+  // short clean word, used for power-up cubes
   function shortWord(cfg, rnd = Math.random) {
     const list = (cfg.customList && cfg.customList.length) ? cfg.customList : (LISTS[cfg.lang] || EN);
     for (let i = 0; i < 40; i++) {
@@ -140,7 +140,7 @@
     return out;
   }
 
-  // avoid a first letter already used by the last few words — keeps lock-on unambiguous
+  // avoid a first letter already used by the last few words; keeps lock-on unambiguous
   function clashes(out, w) {
     const tail = out.slice(-3);
     return tail.some(p => p === w || p[0].toLowerCase() === w[0].toLowerCase());

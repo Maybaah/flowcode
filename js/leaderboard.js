@@ -1,9 +1,10 @@
 "use strict";
-/* flowcode — daily leaderboard client.
+/* flowcode: leaderboard client.
 
-   Submits the keystroke tape of a daily run, not a score: the Worker replays it
-   against the day's seed and decides what the run was worth. Everything here
-   degrades to a no-op when no API URL is configured. */
+   Submits the keystroke tape of a ranked run, not a score: the Worker replays
+   it against the run's seed and decides what the run was worth. Every mode has
+   its own daily board. Everything here degrades to a no-op when no API URL is
+   configured. */
 const Leaderboard = (() => {
   const NAME_KEY = "fc-name";
   const PLAYER_KEY = "fc-player";
@@ -30,21 +31,32 @@ const Leaderboard = (() => {
     return v;
   }
 
-  async function top(day) {
+  async function top(day, mode) {
     if (!enabled()) return null;
-    const url = api() + "/api/leaderboard" + (day ? "?day=" + day : "");
+    const q = new URLSearchParams();
+    if (day) q.set("day", day);
+    if (mode) q.set("mode", mode);
+    const qs = q.toString();
+    const url = api() + "/api/leaderboard" + (qs ? "?" + qs : "");
     const res = await fetch(url, { headers: { "Accept": "application/json" } });
     if (!res.ok) throw new Error("leaderboard unavailable (" + res.status + ")");
     return res.json();
   }
 
-  async function submit(run, playerName) {
+  async function submit(run, playerName, day) {
     if (!enabled()) return null;
     const res = await fetch(api() + "/api/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        day: run.seed,
+        v: 2,
+        day,
+        mode: run.mode,
+        seed: run.seed,
+        flow: run.flow,
+        time: run.timeSet,
+        words: run.wordsSet,
+        lang: run.lang,
         name: playerName,
         player: playerId(),
         keys: run.keys,

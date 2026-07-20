@@ -1,5 +1,5 @@
 "use strict";
-/* flowcode — UI, settings, results */
+/* flowcode: UI, settings, results */
 (() => {
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
@@ -9,12 +9,16 @@
   const BEST_KEY = "fc-best";
   const KEYS_KEY = "fc-keystats";
   const CUSTOM_KEY = "fc-custom";
+  const COINS_KEY = "fc-coins";
+  const SHOP_KEY = "fc-shop";
+  const DAILY_BONUS_KEY = "fc-daily-bonus";
 
   const DEFAULTS = {
     mode: "time", time: 30, words: 25,
     punct: false, nums: false, lang: "en",
     flow: 40, theme: "midnight", sound: true,
     focus: false, custom: false,
+    ranked: false, skin: "",
   };
 
   let S = loadJSON(SETTINGS_KEY, DEFAULTS);
@@ -47,6 +51,9 @@
     $("#tg-nums").classList.toggle("on", S.nums);
     $("#tg-focus").classList.toggle("on", S.focus);
     $("#tg-custom").classList.toggle("on", S.custom);
+    $("#tg-ranked").classList.toggle("on", S.ranked);
+    // a ranked run is a clean run: the modifier pills go quiet while it's on
+    $("#cfg-flags").classList.toggle("ranked-lock", S.ranked && S.mode !== "zen");
     $$("#cfg-lang .pill").forEach(b => b.classList.toggle("on", b.dataset.lang === S.lang));
     $("#wpm-slider").value = S.flow;
     $("#wpm-value").textContent = S.flow;
@@ -58,6 +65,8 @@
   function applyTheme() {
     if (S.theme === "midnight") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = S.theme;
+    if (S.skin) document.documentElement.dataset.skin = S.skin;
+    else delete document.documentElement.dataset.skin;
     $$("#theme-menu button").forEach(b => b.classList.toggle("on", b.dataset.theme === S.theme));
   }
 
@@ -73,6 +82,7 @@
     if (S.custom) { S.custom = false; applySettings(); saveSettings(); }
     else openCustomModal();
   };
+  $("#tg-ranked").onclick = () => { S.ranked = !S.ranked; applySettings(); saveSettings(); };
   $$("#cfg-lang .pill").forEach(b => b.onclick = () => { S.lang = b.dataset.lang; applySettings(); saveSettings(); });
   $("#wpm-slider").oninput = e => {
     S.flow = +e.target.value;
@@ -114,7 +124,7 @@
     const raw = $("#custom-text").value.trim();
     const words = raw.split(/\s+/).filter(Boolean);
     if (words.length < 10) {
-      $("#custom-text").placeholder = "need at least 10 words — paste a longer text";
+      $("#custom-text").placeholder = "need at least 10 words, paste a longer text";
       $("#custom-text").value = raw;
       return;
     }
@@ -128,6 +138,99 @@
     applySettings(); saveSettings();
     closeCustomModal();
   };
+
+  /* ── coins and the shop ── */
+
+  const SHOP_ITEMS = [
+    { id: "theme-sunset", kind: "theme", value: "sunset", label: "sunset theme", price: 400 },
+    { id: "theme-vapor",  kind: "theme", value: "vapor",  label: "vaporwave theme", price: 400 },
+    { id: "theme-aurum",  kind: "theme", value: "aurum",  label: "aurum theme", price: 600 },
+    { id: "skin-wire",    kind: "skin",  value: "wire",   label: "wireframe cubes", price: 500 },
+    { id: "skin-glass",   kind: "skin",  value: "glass",  label: "glass cubes", price: 500 },
+    { id: "skin-magma",   kind: "skin",  value: "magma",  label: "magma cubes", price: 900 },
+  ];
+
+  let coins = loadJSON(COINS_KEY, 0);
+  if (typeof coins !== "number" || !Number.isFinite(coins)) coins = 0;
+
+  function setCoins(v) {
+    coins = Math.max(0, Math.floor(v));
+    saveJSON(COINS_KEY, coins);
+    $("#coin-count").textContent = coins;
+    $("#shop-coins").textContent = coins;
+  }
+
+  const ownedItems = () => {
+    const v = loadJSON(SHOP_KEY, []);
+    return Array.isArray(v) ? v : [];
+  };
+
+  function renderShop() {
+    const list = $("#shop-items");
+    list.innerHTML = "";
+    const owned = ownedItems();
+    for (const it of SHOP_ITEMS) {
+      const row = document.createElement("div");
+      row.className = "shop-item";
+      const sw = document.createElement("span");
+      sw.className = `shop-swatch sw-${it.value}`;
+      const name = document.createElement("span");
+      name.className = "shop-name";
+      name.textContent = it.label;
+      const btn = document.createElement("button");
+      btn.className = "pill shop-btn";
+      const has = owned.includes(it.id);
+      const equipped = it.kind === "theme" ? S.theme === it.value : S.skin === it.value;
+      if (equipped) { btn.textContent = it.kind === "skin" ? "equipped ✓" : "equipped"; btn.classList.add("on"); }
+      else if (has) btn.textContent = "equip";
+      else {
+        btn.textContent = `${it.price} 🪙`;
+        if (coins < it.price) btn.disabled = true;
+      }
+      btn.onclick = () => buyOrEquip(it);
+      row.append(sw, name, btn);
+      list.appendChild(row);
+    }
+  }
+
+  function buyOrEquip(it) {
+    const owned = ownedItems();
+    if (!owned.includes(it.id)) {
+      if (coins < it.price) return;
+      setCoins(coins - it.price);
+      owned.push(it.id);
+      saveJSON(SHOP_KEY, owned);
+      Sfx.record();
+      banner(`${it.label} unlocked!`);
+    }
+    if (it.kind === "theme") S.theme = S.theme === it.value ? "midnight" : it.value;
+    else S.skin = S.skin === it.value ? "" : it.value;
+    applySettings(); saveSettings();
+    renderShop();
+  }
+
+  function openShop() {
+    renderShop();
+    $("#shop-coins").textContent = coins;
+    $("#shop-modal").classList.remove("hidden");
+  }
+  const closeShop = () => $("#shop-modal").classList.add("hidden");
+
+  $("#btn-shop").onclick = openShop;
+  $("#shop-close").onclick = closeShop;
+
+  // score pays out; a finished daily pays a once-a-day bonus on top
+  function awardCoins(res) {
+    let earned = Math.floor(res.score / 120);
+    let bonus = false;
+    if (res.mode === "daily" && res.hits >= 5 && loadJSON(DAILY_BONUS_KEY, 0) !== res.seed) {
+      earned += 50;
+      bonus = true;
+      saveJSON(DAILY_BONUS_KEY, res.seed);
+    }
+    if (earned > 0) setCoins(coins + earned);
+    return { earned, bonus };
+  }
 
   /* ── per-key stats ── */
 
@@ -167,7 +270,12 @@
     }
   }
 
-  /* ── daily leaderboard ── */
+  /* ── leaderboards: one per mode, refreshed daily ── */
+
+  const MODE_LABEL = { daily: "daily", time: "time", words: "words", endless: "survival", sudden: "flawless", ramp: "rush" };
+  const boardable = mode => !!MODE_LABEL[mode];
+  // daily runs verify against their own seed day; other boards use today's date
+  const boardDay = res => res.mode === "daily" ? res.seed : GameMath.dateSeed(new Date());
 
   function medal(i) { return i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : String(i + 1); }
 
@@ -183,25 +291,27 @@
     if (!data || !data.entries.length) {
       const li = document.createElement("li");
       li.className = "board-empty";
-      li.textContent = "no runs yet today — be the first";
+      li.textContent = "no runs yet today · be the first";
       list.appendChild(li);
       return;
     }
     data.entries.forEach((e, i) => {
       const li = document.createElement("li");
       li.className = "board-row" + (mine && e.name === mine && i + 1 === lastRank ? " mine" : "");
-      // every field is written as text — nothing from the API reaches the parser
+      // every field is written as text, so nothing from the API reaches the parser
       const cell = (cls, text) => {
         const s = document.createElement("span");
         s.className = cls;
         s.textContent = text;
         return s;
       };
+      const meta = `${e.wpm} wpm · ${e.acc}% · ${e.words}w` +
+        (lastResults && lastResults.mode !== "daily" && e.flow ? ` · f${e.flow}` : "");
       li.append(
         cell("board-rank", medal(i)),
         cell("board-name", e.name),
         cell("board-score", e.score),
-        cell("board-meta", `${e.wpm} wpm · ${e.acc}% · ${e.words}w`),
+        cell("board-meta", meta),
       );
       list.appendChild(li);
     });
@@ -210,9 +320,10 @@
   let lastRank = 0;
 
   async function loadBoard() {
+    if (!lastResults) return;
     try {
       boardStatus("loading…");
-      const data = await Leaderboard.top(lastResults && lastResults.seed);
+      const data = await Leaderboard.top(boardDay(lastResults), lastResults.mode);
       boardStatus("");
       renderBoard(data, Leaderboard.name());
     } catch (err) {
@@ -221,8 +332,10 @@
     }
   }
 
+  const submittable = res => res && boardable(res.mode) && (res.mode === "daily" || res.ranked);
+
   async function submitRun() {
-    if (!lastResults || lastResults.mode !== "daily") return;
+    if (!submittable(lastResults)) return;
     const nameInput = $("#board-name");
     const playerName = nameInput.value.trim();
     if (!playerName) {
@@ -235,11 +348,11 @@
     btn.disabled = true;
     boardStatus("verifying…");
     try {
-      const res = await Leaderboard.submit(lastResults, playerName);
+      const res = await Leaderboard.submit(lastResults, playerName, boardDay(lastResults));
       lastRank = res.rank || 0;
       boardStatus(`verified: ${res.verified.wpm} wpm · rank #${res.rank}`, "board-ok");
       // the response carries the board as of the write, so no second read is needed
-      renderBoard(res.entries ? { entries: res.entries } : await Leaderboard.top(lastResults.seed), playerName);
+      renderBoard(res.entries ? { entries: res.entries } : await Leaderboard.top(boardDay(lastResults), lastResults.mode), playerName);
       btn.textContent = "submitted";
     } catch (err) {
       // the server recomputes the score, so a rejection means the run itself failed
@@ -252,9 +365,17 @@
 
   function setupBoard(res) {
     const wrap = $("#res-board-wrap");
-    const show = res.mode === "daily" && Leaderboard.enabled();
+    const hint = $("#rank-hint");
+    const show = submittable(res) && Leaderboard.enabled();
     wrap.classList.toggle("hidden", !show);
+    // an unranked run in a rankable mode gets a nudge instead of a board
+    const nudge = !show && Leaderboard.enabled() && boardable(res.mode) && res.mode !== "daily";
+    hint.classList.toggle("hidden", !nudge);
+    if (nudge) hint.textContent = `🏆 turn on ranked before a run to compete on today's ${MODE_LABEL[res.mode]} board`;
     if (!show) return;
+    $("#board-title").textContent = res.mode === "daily"
+      ? "daily leaderboard"
+      : `${MODE_LABEL[res.mode]} leaderboard · today`;
     const btn = $("#board-send");
     btn.disabled = false;
     btn.textContent = "submit run";
@@ -282,7 +403,9 @@
   /* ── HUD ── */
 
   const PRIMARY_LABEL = { time: "sec", words: "left", endless: "words", sudden: "words", ramp: "words", zen: "sec", daily: "sec" };
-  const DAILY = { time: 60, flow: 50, lang: "en" };
+  // the daily config lives in verify.js so client and server can never drift
+  const DAILY = Verify.DAILY;
+  const RUSH_RAMP = { step: 4, every: 8, cap: 260 };
 
   function onHud(h) {
     let primary;
@@ -297,7 +420,7 @@
     $("#hud-combo").textContent = h.combo;
     $(".hud-combo").classList.toggle("hot", h.combo >= 10);
     if (h.lives > 0) $("#hud-lives").textContent = "♥".repeat(h.lives);
-    if (S.mode === "ramp") $("#hud-flow").textContent = h.flow;
+    if (S.mode === "ramp" || S.mode === "daily") $("#hud-flow").textContent = h.flow;
     $("#buffer").textContent = h.buffer;
   }
 
@@ -314,23 +437,34 @@
     $("#hud-primary-label").textContent = PRIMARY_LABEL[S.mode];
     const livesMode = S.mode === "endless" || S.mode === "ramp";
     $("#hud-lives-wrap").classList.toggle("hidden", !livesMode);
-    $("#hud-flow-wrap").classList.toggle("hidden", S.mode !== "ramp");
+    $("#hud-flow-wrap").classList.toggle("hidden", S.mode !== "ramp" && S.mode !== "daily");
     $("#buffer").textContent = "";
     let cfg;
     if (S.mode === "daily") {
-      // fixed and seeded so every player gets the same run today
+      // fixed and seeded so every player gets the same run today; the flow
+      // ramps on a schedule, so the minute keeps getting harder
       cfg = {
         mode: "daily", time: DAILY.time, flow: DAILY.flow, lang: DAILY.lang,
-        punct: false, nums: false,
-        seed: GameMath.dateSeed(new Date()), noPowerups: true,
+        ramp: DAILY.ramp, punct: false, nums: false,
+        seed: GameMath.dateSeed(new Date()), noPowerups: true, ranked: true,
       };
     } else {
+      // a ranked run must be reproducible server-side: seeded words, no
+      // power-ups, no modifiers; casual runs keep all the toys
+      const ranked = S.ranked && boardable(S.mode) && S.mode !== "daily";
       cfg = {
         mode: S.mode, time: S.time, words: S.words,
-        punct: S.punct, nums: S.nums, lang: S.lang, flow: S.flow,
-        customList: S.custom ? customList() : null,
-        weakChars: S.focus ? weakKeys().slice(0, 3).map(k => k.ch) : null,
+        punct: !ranked && S.punct, nums: !ranked && S.nums,
+        lang: S.lang, flow: S.flow,
+        customList: !ranked && S.custom ? customList() : null,
+        weakChars: !ranked && S.focus ? weakKeys().slice(0, 3).map(k => k.ch) : null,
+        ranked,
       };
+      if (S.mode === "ramp") cfg.ramp = RUSH_RAMP;
+      if (ranked) {
+        cfg.noPowerups = true;
+        cfg.seed = crypto.getRandomValues(new Uint32Array(1))[0];
+      }
     }
     Game.start(cfg, { onHud, onEnd, onBanner: banner });
   }
@@ -372,7 +506,9 @@
 
     const meaningful = res.time >= 10 || res.hits >= 10;
     let isPB = false;
+    let purse = { earned: 0, bonus: false };
     if (meaningful) {
+      purse = awardCoins(res);
       const best = loadJSON(BEST_KEY, {});
       const param = res.mode === "time" ? S.time
         : res.mode === "words" ? S.words
@@ -404,6 +540,9 @@
 
     $("#res-foot-note").textContent = res.mode === "daily"
       ? `daily #${GameMath.dailyNumber(new Date())} · score ${res.score}`
+      : "";
+    $("#res-coins").textContent = purse.earned > 0
+      ? `+${purse.earned} 🪙${purse.bonus ? " (daily bonus)" : ""}`
       : "";
     renderWeakKeys();
     setupBoard(res);
@@ -495,7 +634,7 @@
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // average wpm — dashed
+    // average wpm, dashed
     ctx.strokeStyle = cssVar("--dim");
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
@@ -513,7 +652,7 @@
     for (let i = 1; i < sm.length; i++) ctx.lineTo(px(i), py(sm[i]));
     ctx.stroke();
 
-    // errors — crosses
+    // errors as crosses
     const danger = cssVar("--danger");
     ctx.strokeStyle = danger;
     ctx.lineWidth = 2;
@@ -606,7 +745,7 @@
     ctx.font = "13px 'JetBrains Mono', monospace";
     ctx.fillStyle = dim;
     ctx.textAlign = "center";
-    ctx.fillText("finish the word before its cube crosses the line — github.com/Maybaah/flowcode", W / 2, H - 26);
+    ctx.fillText("finish the word before its cube crosses the line · github.com/Maybaah/flowcode", W / 2, H - 26);
     return cv;
   }
 
@@ -661,6 +800,12 @@
     // while the custom-text modal is open, keys belong to its textarea
     if (!$("#custom-modal").classList.contains("hidden")) {
       if (k === "Escape") { e.preventDefault(); closeCustomModal(); }
+      return;
+    }
+
+    // the shop swallows keys too, so browsing it cannot start a run
+    if (!$("#shop-modal").classList.contains("hidden")) {
+      if (k === "Escape") { e.preventDefault(); closeShop(); }
       return;
     }
 
@@ -742,6 +887,7 @@
   /* ── boot ── */
 
   applySettings();
+  setCoins(coins);
   toIdle();
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") {

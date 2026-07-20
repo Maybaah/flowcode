@@ -1,5 +1,5 @@
 "use strict";
-/* flowcode — unit tests for the pure game math. Run: node --test tests/ */
+/* flowcode: unit tests for the pure game math. Run: node --test tests/stats.test.js tests/verify.test.js */
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const M = require("../js/stats.js");

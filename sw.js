@@ -1,11 +1,11 @@
-/* flowcode — service worker.
+/* flowcode: service worker.
 
    Strategy is split by how a file changes:
 
    - Code and markup (html, css, js, manifest) are network-first. A pure
      cache-first worker will happily serve last week's build, and worse, during
      an update the *previous* worker is still handling requests, so a changed
-     file — js/config.js turning the leaderboard on, say — could be missed for a
+     file (js/config.js turning the leaderboard on, say) could be missed for a
      whole visit. Network-first keeps a deploy honest; the cache is the fallback
      when the network is gone, so offline still works.
    - Fonts and images never change without changing their name, so they are
@@ -13,7 +13,7 @@
 
    Bump CACHE when the precache list itself changes. */
 "use strict";
-const CACHE = "flowcode-v4";
+const CACHE = "flowcode-v5";
 
 const ASSETS = [
   ".",
@@ -25,6 +25,7 @@ const ASSETS = [
   "js/leaderboard.js",
   "js/stats.js",
   "js/words.js",
+  "js/verify.js",
   "js/audio.js",
   "js/game.js",
   "js/main.js",
