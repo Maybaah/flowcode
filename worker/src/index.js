@@ -12,6 +12,9 @@ const ALLOWED_ORIGINS = [
   "https://maybaah.github.io",
   "http://localhost:4173",
   "http://127.0.0.1:4173",
+  // the arcade leaderboard page reads these boards from its local dev server
+  "http://localhost:8619",
+  "http://127.0.0.1:8619",
 ];
 
 const PROTOCOL = 2;            // bumped when the replay rules change
