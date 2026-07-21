@@ -130,6 +130,10 @@ body.playing #topbar { opacity: 0; transform: translateY(-8px); pointer-events: 
 }
 .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
 .icon-btn.off { opacity: .4; }
+a.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  text-decoration: none; font-size: 18px;
+}
 
 /* ═══════════════ HUD ═══════════════ */
 #hud {
