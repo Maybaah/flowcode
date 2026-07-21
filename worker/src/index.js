@@ -3,7 +3,14 @@
    Clients submit the keystroke tape of a ranked run, never a score. The Worker
    rebuilds that run's word sequence from its seed, replays the tape, and stores
    the score it computed itself. Every mode has its own daily board.
-   See js/verify.js for the replay. */
+   See js/verify.js for the replay.
+
+   Rows live in the shared arcade database, in the same `scores` table as
+   wordle, minesweeper and 2048: game 'flowcode', board '<mode>-<day>'. That
+   table sorts ascending, so the stored score is the negated run score and the
+   real points travel in `detail` alongside wpm, accuracy and combo. The replay
+   stays here rather than moving to the arcade Worker because it needs this
+   game's word engine, which lives one directory up. */
 "use strict";
 import Verify from "../../js/verify.js";
 import GameMath from "../../js/stats.js";
@@ -22,11 +29,34 @@ const MAX_BODY = 128 * 1024;   // a full tape is a few KB; this is generous
 const MAX_PER_IP_PER_DAY = 60;
 const TOP_N = 50;
 
+const GAME = "flowcode";
+
+/* Boards sort ascending on the stored score, so the best run comes first here
+   too; the row carries the negated score and unpacks in entryOf(). */
 const TOP_QUERY =
-  `SELECT name, wpm, acc, score, words, max_combo AS maxCombo, flow, created_at AS at
-     FROM scores WHERE day = ?1 AND mode = ?2
-    ORDER BY score DESC, wpm DESC, created_at ASC
+  `SELECT name, score, detail, created_at AS at
+     FROM scores WHERE game = ?1 AND board = ?2
+    ORDER BY score ASC, created_at ASC
     LIMIT ?3`;
+
+const boardOf = (mode, day) => `${mode}-${day}`;
+
+/* The in-game board and the arcade leaderboard page both read the flat shape
+   this game has always returned, so the detail blob is spread back out. */
+function entryOf(row) {
+  let detail = {};
+  try { detail = JSON.parse(row.detail); } catch {}
+  return {
+    name: row.name,
+    wpm: detail.wpm || 0,
+    acc: detail.acc || 0,
+    score: -row.score,
+    words: detail.words || 0,
+    maxCombo: detail.maxCombo || 0,
+    flow: detail.flow || 0,
+    at: row.at,
+  };
+}
 
 function cors(origin) {
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -81,9 +111,9 @@ async function handleLeaderboard(req, env, origin) {
   const mode = url.searchParams.get("mode") || "daily";
   if (!Verify.MODES[mode]) return json({ error: "bad mode" }, 400, origin);
 
-  const { results } = await env.DB.prepare(TOP_QUERY).bind(day, mode, TOP_N).all();
+  const { results } = await env.DB.prepare(TOP_QUERY).bind(GAME, boardOf(mode, day), TOP_N).all();
 
-  return json({ day, mode, count: results.length, entries: results }, 200, origin, {
+  return json({ day, mode, count: results.length, entries: results.map(entryOf) }, 200, origin, {
     "Cache-Control": "public, max-age=10",
   });
 }
@@ -159,30 +189,35 @@ async function handleSubmit(req, env, origin) {
   const run = Verify.replay(cfg, body.keys);
   if (!run.ok) return json({ error: "run rejected", reason: run.reason }, 422, origin);
 
+  const board = boardOf(cfg.mode, day);
+  const stored = -run.score;
+  const detail = JSON.stringify({
+    points: run.score, wpm: run.wpm, acc: run.acc,
+    words: run.words, maxCombo: run.maxCombo, flow: cfg.flow,
+  });
+
   // one row per player per board; keep their best
   await db.prepare(
-    `INSERT INTO scores (day, mode, player, name, wpm, acc, score, words, max_combo, flow, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-     ON CONFLICT(day, mode, player) DO UPDATE SET
-       name = excluded.name, wpm = excluded.wpm, acc = excluded.acc,
-       score = excluded.score, words = excluded.words,
-       max_combo = excluded.max_combo, flow = excluded.flow,
-       created_at = excluded.created_at
-     WHERE excluded.score > scores.score`
-  ).bind(day, cfg.mode, player, name, run.wpm, run.acc, run.score, run.words, run.maxCombo, cfg.flow, Date.now()).run();
+    `INSERT INTO scores (game, board, player, name, score, detail, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+     ON CONFLICT(game, board, player) DO UPDATE SET
+       name = excluded.name, score = excluded.score,
+       detail = excluded.detail, created_at = excluded.created_at
+     WHERE excluded.score < scores.score`
+  ).bind(GAME, board, player, name, stored, detail, Date.now()).run();
 
   const rank = await db.prepare(
-    `SELECT COUNT(*) + 1 AS rank FROM scores WHERE day = ?1 AND mode = ?2 AND score > ?3`
-  ).bind(day, cfg.mode, run.score).first();
+    `SELECT COUNT(*) + 1 AS rank FROM scores WHERE game = ?1 AND board = ?2 AND score < ?3`
+  ).bind(GAME, board, stored).first();
 
   // hand back the fresh board so the client never has to re-read a lagging replica
-  const { results } = await db.prepare(TOP_QUERY).bind(day, cfg.mode, TOP_N).all();
+  const { results } = await db.prepare(TOP_QUERY).bind(GAME, board, TOP_N).all();
 
   return json({
     ok: true,
     verified: run,
     rank: rank ? rank.rank : null,
-    entries: results,
+    entries: results.map(entryOf),
   }, 200, origin);
 }
 

@@ -4,6 +4,14 @@ The leaderboards for [flowcode](../README.md). A Cloudflare Worker with a D1
 database, deployed separately from the game: GitHub Pages serves static files and
 cannot store anything, so this is the only piece that needs a server.
 
+On maybaah.github.io the rows go into the `arcade` database shared with the
+other mini-games, in one `scores` table keyed `(game, board, player)`: game
+`flowcode`, board `<mode>-<day>`. That table sorts ascending, so a row holds the
+negated score and keeps the real points in `detail` next to wpm, accuracy, words
+and combo. The replay stays in this Worker rather than the arcade one because it
+needs this game's word engine. Deploying standalone works the same way against a
+database of your own.
+
 The game works perfectly well without it. Leave `leaderboardApi` empty in
 [`js/config.js`](../js/config.js) and no leaderboard UI appears and no request is
 ever made.
@@ -43,14 +51,14 @@ You need a free Cloudflare account. From this directory:
 ```bash
 npm install
 npx wrangler login              # opens a browser to authorise
-npx wrangler d1 create flowcode # prints a database_id
+npx wrangler d1 create arcade   # prints a database_id
 ```
 
-Paste that `database_id` into [`wrangler.toml`](wrangler.toml), then create the
-tables and ship it:
+Paste that `database_id` into [`wrangler.toml`](wrangler.toml), create the table
+with the schema from the [site repo](https://github.com/Maybaah/Maybaah.github.io)
+(`worker/schema.sql`), then ship it:
 
 ```bash
-npm run db:remote               # applies schema.sql to the live database
 npm run deploy                  # prints your worker URL
 ```
 
@@ -61,7 +69,7 @@ you host the game somewhere other than `maybaah.github.io`.
 ## Local development
 
 ```bash
-npm run db:local                # local sqlite copy of the schema
+wrangler d1 execute arcade --local --file=/path/to/site/worker/schema.sql
 npm run dev                     # http://127.0.0.1:8787
 ```
 

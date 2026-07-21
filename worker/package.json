@@ -6,9 +6,7 @@
   "description": "Cloudflare Worker + D1 backing the flowcode daily leaderboard",
   "scripts": {
     "dev": "wrangler dev --local",
-    "deploy": "wrangler deploy",
-    "db:local": "wrangler d1 execute flowcode --local --file=./schema.sql",
-    "db:remote": "wrangler d1 execute flowcode --remote --file=./schema.sql"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4"

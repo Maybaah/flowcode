@@ -2,12 +2,14 @@ name = "flowcode-leaderboard"
 main = "src/index.js"
 compatibility_date = "2026-07-01"
 
-# Created with:  wrangler d1 create flowcode
-# Paste the id the command prints into database_id below.
+# Shared with the other mini-games: every board on maybaah.github.io lives in
+# the one `arcade` database, in the same `scores` table. The old `flowcode`
+# database (20cd8a0b-d3f1-4bb1-8c1d-a2cfddaf66b1) was migrated across and is
+# no longer written to.
 [[d1_databases]]
 binding = "DB"
-database_name = "flowcode"
-database_id = "20cd8a0b-d3f1-4bb1-8c1d-a2cfddaf66b1"
+database_name = "arcade"
+database_id = "34bb6f35-2d7c-483d-9e7f-9445fb66c9d6"
 
 [observability]
 enabled = true
