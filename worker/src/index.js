@@ -39,7 +39,9 @@ const TOP_QUERY =
     ORDER BY score ASC, created_at ASC
     LIMIT ?3`;
 
+/* Each mode has a board per day plus one that keeps a player's best ever. */
 const boardOf = (mode, day) => `${mode}-${day}`;
+const allTimeBoardOf = (mode) => `${mode}-all`;
 
 /* The in-game board and the arcade leaderboard page both read the flat shape
    this game has always returned, so the detail blob is spread back out. */
@@ -104,14 +106,16 @@ function yesterdaySeed() {
 async function handleLeaderboard(req, env, origin) {
   const url = new URL(req.url);
   const raw = url.searchParams.get("day");
-  const day = raw ? Number(raw) : todaySeed();
-  if (!Number.isInteger(day) || day < 20260101 || day > 21000101) {
+  const allTime = raw === "all";
+  const day = allTime ? "all" : (raw ? Number(raw) : todaySeed());
+  if (!allTime && (!Number.isInteger(day) || day < 20260101 || day > 21000101)) {
     return json({ error: "bad day" }, 400, origin);
   }
   const mode = url.searchParams.get("mode") || "daily";
   if (!Verify.MODES[mode]) return json({ error: "bad mode" }, 400, origin);
 
-  const { results } = await env.DB.prepare(TOP_QUERY).bind(GAME, boardOf(mode, day), TOP_N).all();
+  const board = allTime ? allTimeBoardOf(mode) : boardOf(mode, day);
+  const { results } = await env.DB.prepare(TOP_QUERY).bind(GAME, board, TOP_N).all();
 
   return json({ day, mode, count: results.length, entries: results.map(entryOf) }, 200, origin, {
     "Cache-Control": "public, max-age=10",
@@ -195,16 +199,19 @@ async function handleSubmit(req, env, origin) {
     points: run.score, wpm: run.wpm, acc: run.acc,
     words: run.words, maxCombo: run.maxCombo, flow: cfg.flow,
   });
+  const at = Date.now();
 
-  // one row per player per board; keep their best
-  await db.prepare(
-    `INSERT INTO scores (game, board, player, name, score, detail, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-     ON CONFLICT(game, board, player) DO UPDATE SET
-       name = excluded.name, score = excluded.score,
-       detail = excluded.detail, created_at = excluded.created_at
-     WHERE excluded.score < scores.score`
-  ).bind(GAME, board, player, name, stored, detail, Date.now()).run();
+  // one row per player per board; keep their best, on the day's board and on all-time
+  for (const target of [board, allTimeBoardOf(cfg.mode)]) {
+    await db.prepare(
+      `INSERT INTO scores (game, board, player, name, score, detail, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+       ON CONFLICT(game, board, player) DO UPDATE SET
+         name = excluded.name, score = excluded.score,
+         detail = excluded.detail, created_at = excluded.created_at
+       WHERE excluded.score < scores.score`
+    ).bind(GAME, target, player, name, stored, detail, at).run();
+  }
 
   const rank = await db.prepare(
     `SELECT COUNT(*) + 1 AS rank FROM scores WHERE game = ?1 AND board = ?2 AND score < ?3`

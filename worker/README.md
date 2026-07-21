@@ -80,7 +80,7 @@ origin is already allowed.
 
 | Method | Path | Purpose |
 | :-- | :-- | :-- |
-| `GET` | `/api/leaderboard?day=YYYYMMDD&mode=time` | Top 50 for a board. Defaults to today's daily. |
+| `GET` | `/api/leaderboard?day=YYYYMMDD&mode=time` | Top 50 for a board. Defaults to today's daily. `day=all` returns the mode's all-time board. |
 | `POST` | `/api/submit` | Body `{v: 2, day, mode, seed, flow, time, words, lang, name, player, keys}`. Replays and stores. |
 | `GET` | `/api/health` | Liveness, the current day seed, and the protocol version. |
 
